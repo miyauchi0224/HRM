@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(cd:*)",
+      "Bash(grep:*)",
+      "Bash(wc:*)",
+      "Bash(chmod:*)",
+      "Bash(find:*)",
+      "Bash(curl:*)",
+      "Read(//c/Users/MiyauchiHitoshi/Documents/**)",
+      "Bash(python:*)",
+      "Edit",
+      "Write",
+      "Bash(grep -E \"\\\\.py$|\\\\.json$|\\\\.txt$\")"
+    ]
+  }
+}
