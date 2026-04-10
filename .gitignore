@@ -1,0 +1,32 @@
+.claude
+
+# 環境変数（機密情報）
+.env
+backend/.env
+**/.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Node.js
+node_modules/
+infra/cdk/dist/
+frontend/.next/
+
+# Django
+backend/staticfiles/
+backend/media/
+backend/db.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
