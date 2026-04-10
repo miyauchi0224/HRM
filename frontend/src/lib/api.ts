@@ -16,21 +16,37 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
+    console.error('[API Error]', err.config?.url, err.response?.status, err.response?.data)
+
     if (err.response?.status === 401) {
       const refresh = localStorage.getItem('refresh_token')
+      console.log('[Auth] 401 detected, refresh token exists:', !!refresh)
+
       if (refresh) {
         try {
           const { data } = await axios.post(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/refresh/`,
+            `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'}/api/v1/auth/refresh/`,
             { refresh }
           )
-          localStorage.setItem('access_token', data.access)
+          console.log('[Auth] Token refresh success')
+          localStorage.setItem('access_token',  data.access)
+          if (data.refresh) localStorage.setItem('refresh_token', data.refresh)
           err.config.headers.Authorization = `Bearer ${data.access}`
           return api(err.config)
-        } catch {
+        } catch (refreshErr: any) {
+          const msg = `[Auth] Token refresh failed: ${refreshErr.response?.status} ${JSON.stringify(refreshErr.response?.data)}`
+          console.error(msg)
+          localStorage.setItem('debug_last_error', msg)
           localStorage.clear()
+          localStorage.setItem('debug_last_error', msg)  // clear後に再セット
           window.location.href = '/login'
         }
+      } else {
+        const msg = `[Auth] No refresh token. Original error: ${err.config?.url} ${err.response?.status} ${JSON.stringify(err.response?.data)}`
+        localStorage.setItem('debug_last_error', msg)
+        localStorage.clear()
+        localStorage.setItem('debug_last_error', msg)
+        window.location.href = '/login'
       }
     }
     return Promise.reject(err)
