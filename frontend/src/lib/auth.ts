@@ -1,8 +1,8 @@
 import api from './api'
 
 export interface LoginResponse {
-  access_token:  string
-  refresh_token: string
+  access:  string
+  refresh: string
   user: {
     id:         string
     email:      string
@@ -13,8 +13,12 @@ export interface LoginResponse {
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
   const { data } = await api.post<LoginResponse>('/api/v1/auth/login/', { email, password })
-  localStorage.setItem('access_token',  data.access_token)
-  localStorage.setItem('refresh_token', data.refresh_token)
+  console.log('[Login] Response keys:', Object.keys(data))
+  console.log('[Login] access token exists:', !!data.access)
+  console.log('[Login] refresh token exists:', !!data.refresh)
+  localStorage.setItem('access_token',  data.access)
+  localStorage.setItem('refresh_token', data.refresh)
+  console.log('[Login] Stored access_token:', localStorage.getItem('access_token')?.slice(0, 20) + '...')
   return data
 }
 
@@ -33,7 +37,6 @@ export function getStoredUser() {
   const token = localStorage.getItem('access_token')
   if (!token) return null
   try {
-    // JWT のペイロードをデコード（署名検証なし・表示用のみ）
     const payload = JSON.parse(atob(token.split('.')[1]))
     return payload
   } catch { return null }

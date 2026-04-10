@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -17,10 +17,24 @@ export default function LoginPage() {
   const router   = useRouter()
   const setUser  = useAuthStore((s) => s.setUser)
   const [error, setError] = useState('')
+  const [debugError, setDebugError] = useState('')
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
+
+  useEffect(() => {
+    // デバッグエラーがあれば表示
+    const dbg = localStorage.getItem('debug_last_error')
+    if (dbg) {
+      setDebugError(dbg)
+      localStorage.removeItem('debug_last_error')
+    }
+    // すでにログイン済みならダッシュボードへ
+    if (localStorage.getItem('access_token')) {
+      router.replace('/')
+    }
+  }, [])
 
   const onSubmit = async (data: FormData) => {
     setError('')
@@ -45,13 +59,21 @@ export default function LoginPage() {
           </div>
         )}
 
+        {debugError && (
+          <div className="bg-yellow-50 border border-yellow-300 text-yellow-800 px-4 py-3 rounded-lg mb-4 text-xs font-mono break-all">
+            <p className="font-bold mb-1">デバッグ情報</p>
+            {debugError}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
               メールアドレス
             </label>
             <input
               {...register('email')}
+              id="email"
               type="email"
               autoComplete="email"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -63,11 +85,12 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               パスワード
             </label>
             <input
               {...register('password')}
+              id="password"
               type="password"
               autoComplete="current-password"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
