@@ -1,0 +1,22 @@
+{
+  "name": "hrm-infra",
+  "version": "1.0.0",
+  "description": "HRM AWS Infrastructure (CDK)",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --all",
+    "destroy": "cdk destroy --all",
+    "diff": "cdk diff"
+  },
+  "devDependencies": {
+    "@types/node": "22.x",
+    "typescript": "~5.7",
+    "aws-cdk": "2.x"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.x",
+    "constructs": "^10.0.0"
+  }
+}
