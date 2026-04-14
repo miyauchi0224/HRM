@@ -20,13 +20,22 @@ class EmployeeListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Employee
         fields = ['id', 'employee_number', 'last_name', 'first_name',
-                  'department', 'position', 'grade', 'hire_date', 'retire_date']
+                  'department', 'position', 'grade', 'hire_date', 'retire_date', 'avatar']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        data['full_name']  = instance.full_name
-        data['is_active']  = instance.retire_date is None
+        data['full_name']   = instance.full_name
+        data['is_active']   = instance.retire_date is None
+        data['avatar_url']  = self._build_avatar_url(instance)
         return data
+
+    def _build_avatar_url(self, instance):
+        if not instance.avatar:
+            return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(instance.avatar.url)
+        return instance.avatar.url
 
 
 class EmployeeDetailSerializer(serializers.ModelSerializer):
@@ -35,18 +44,34 @@ class EmployeeDetailSerializer(serializers.ModelSerializer):
     family_members     = FamilyMemberSerializer(many=True, read_only=True)
     email              = serializers.EmailField(source='user.email', read_only=True)
     role               = serializers.CharField(source='user.role', read_only=True)
+    full_name          = serializers.CharField(source='full_name', read_only=True)
+    is_active          = serializers.SerializerMethodField()
+    avatar_url         = serializers.SerializerMethodField()
 
     class Meta:
         model  = Employee
         fields = [
-            'id', 'employee_number', 'last_name', 'first_name',
+            'id', 'employee_number', 'full_name', 'last_name', 'first_name',
             'last_name_kana', 'first_name_kana', 'birth_date', 'gender',
             'hire_date', 'retire_date', 'department', 'position', 'grade',
             'employment_type', 'phone', 'personal_email',
-            'email', 'role', 'emergency_contacts', 'family_members',
+            'zip_code', 'address', 'nearest_station',
+            'workplace_name', 'workplace_address', 'workplace_phone', 'commute_route',
+            'email', 'role', 'is_active', 'avatar_url', 'emergency_contacts', 'family_members',
             'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'full_name', 'is_active', 'avatar_url', 'created_at', 'updated_at']
+
+    def get_is_active(self, obj):
+        return obj.retire_date is None
+
+    def get_avatar_url(self, obj):
+        if not obj.avatar:
+            return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.avatar.url)
+        return obj.avatar.url
 
 
 class CreateEmployeeSerializer(serializers.Serializer):

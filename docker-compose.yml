@@ -47,6 +47,8 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - WATCHPACK_POLLING=true   # Windows Docker でのファイル監視を polling に切替
+      - CHOKIDAR_USEPOLLING=true
     depends_on:
       - backend
 

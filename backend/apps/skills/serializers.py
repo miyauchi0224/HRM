@@ -10,12 +10,7 @@ class SkillSerializer(serializers.ModelSerializer):
         model  = Skill
         fields = [
             'id', 'skill_name', 'category', 'category_display',
-            'level', 'certified_date', 'expiry_date', 'note',
+            'level', 'organizer', 'certified_date', 'expiry_date', 'note',
             'employee_name',
         ]
         read_only_fields = ['id', 'employee_name', 'category_display']
-
-    def validate_level(self, value):
-        if not (1 <= value <= 5):
-            raise serializers.ValidationError('レベルは1〜5の範囲で入力してください')
-        return value
