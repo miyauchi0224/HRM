@@ -95,9 +95,28 @@ class MBOGoalViewSet(viewsets.ModelViewSet):
             )
         return Response(MBOGoalSerializer(goal).data)
 
+    @action(detail=True, methods=['patch'], url_path='approve')
+    def approve(self, request, pk=None):
+        """管理職が目標を承認 → 月報作成が可能になる"""
+        if not request.user.is_manager:
+            return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
+        goal = self.get_object()
+        if goal.status != MBOGoal.Status.SUBMITTED:
+            return Response({'error': '提出済みの目標のみ承認できます'}, status=status.HTTP_400_BAD_REQUEST)
+        goal.status = MBOGoal.Status.APPROVED
+        goal.save()
+        Notification.send(
+            user=goal.employee.user,
+            type_=Notification.NotificationType.MBO_FEEDBACK,
+            title='MBO目標が承認されました',
+            message=f'「{goal.title}」が承認されました。月間報告を作成できます。',
+            related_url='/mbo',
+        )
+        return Response(MBOGoalSerializer(goal).data)
+
     @action(detail=True, methods=['patch'], url_path='evaluate')
     def evaluate(self, request, pk=None):
-        """上司評価"""
+        """上司評価（スコア付与）"""
         if not request.user.is_manager:
             return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
         goal = self.get_object()
@@ -123,6 +142,33 @@ class MBOReportViewSet(viewsets.ModelViewSet):
         if not user.is_manager:
             qs = qs.filter(goal__employee__user=user)
         return qs
+
+    def perform_create(self, serializer):
+        goal = serializer.validated_data.get('goal')
+        if goal and goal.status not in (MBOGoal.Status.APPROVED, MBOGoal.Status.EVALUATED):
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'goal': '承認済みの目標にのみ月間報告を作成できます'})
+        serializer.save()
+
+    @action(detail=True, methods=['patch'], url_path='submit')
+    def submit(self, request, pk=None):
+        """社員が月報を上司に申請"""
+        report = self.get_object()
+        if report.goal.employee.user != request.user:
+            return Response({'error': '自分の月報のみ申請できます'}, status=status.HTTP_403_FORBIDDEN)
+        if report.status != MBOReport.Status.DRAFT:
+            return Response({'error': '下書きの月報のみ申請できます'}, status=status.HTTP_400_BAD_REQUEST)
+        report.status = MBOReport.Status.SUBMITTED
+        report.save()
+        for manager in report.goal.employee.managers.all():
+            Notification.send(
+                user=manager.user,
+                type_=Notification.NotificationType.MBO_FEEDBACK,
+                title='MBO月報の申請が届きました',
+                message=f'{report.goal.employee.full_name}さんから{report.month.strftime("%Y年%m月")}の月報申請があります',
+                related_url='/mbo',
+            )
+        return Response(MBOReportSerializer(report).data)
 
     @action(detail=True, methods=['post'], url_path='ai-suggest')
     def ai_suggest(self, request, pk=None):

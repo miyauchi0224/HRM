@@ -62,7 +62,8 @@ PDFでダウンロード可能
 ## システム仕様
 ### 権限ロール
 社員-プロジェクト従事者
-管理職-プロジェクト管理者
+上司-社員の上位者
+管理職-取締役や部長・課長など
 人事担当者
 システム管理者（アカウント作成権限あり）
 
@@ -98,5 +99,247 @@ postgres
 
 #
 マイグレーションファイルを作成して
+
+# ネットワークのログ読み込み
+import os
+from glob import glob
+[os.remove(g) for g in glob(f"localhost.har/*.txt")]
+with open("localhost.har.txt","r",encoding="utf-8") as f:
+    for i,line in enumerate(f.readlines()):
+        fid = int(i//200)
+        wfile = f"localhost.har/{fid}.txt"
+        with open(wfile,"a",newline="",encoding="utf-8") as fw:
+            fw.write(line)
+
+
+
+#
+重大
+JSバンドルが巨大すぎる — main-app.js が 5.74MB はかなり大きい。Code Splitting（コード分割）の余地が大
+セキュリティヘッダーが未設定 — Content-Security-Policy・X-Frame-Options 等が全部欠如。本番リリース前に必須
+キャッシュ戦略 — 静的アセットも no-store になっており、再訪時に毎回フルロード
+
+パフォーマンス
+初期表示に3秒以上 — DOMContentLoaded: 1,023ms / onLoad: 3,044ms。開発環境とはいえ重い
+リクエストのキューイング — ブロッキング時間が後のリクエストほど増加している（ブラウザの並行接続数制限に近づいている）
+
+#
+勤怠情報をxlsx,CSV,PDFで出力可能。
+xlsxのフォーマットはtemplate/OC作業表（名前）2026年度.xlsx
+csvまたはxlsxでアップロードして、出退勤情報を登録可能。
+
+
+# mbo が 404
+GET http://localhost:3000/mbo 404 (Not Found)Understand this error
+inject.js:77 WARNING:Found both blacklist and siteRules — using siteRules
+main-app.js?v=1776070653591:1825 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+
+
+# http://localhost:3000/leave　が 404
+
+
+
+# 
+表示OK
+
+
+・ mbo
+目標登録はデフォルトで上期下期、期間を細分化できる。
+目標登録後、上司に依頼送信。
+
+登録した目標は管理職の承認。
+承認後、月報作成可能。
+
+月報作成後、社員は申請できる。
+申請後に上司は承認できる。
+
+
+・　給与計算
+人事担当者は、締め日を設定できる。
+デフォルト：前月16日から15日まで
+
+以下の条件が満たされたとき、給与計算が可能。
+　当月の勤務記録があり、勤務記録にはプロジェクト件番があり、プロジェクト名があり、プロジェクト管理者がある。
+
+給与計算の算出は丁寧に出力
+給与計算はCSV、xlsx、pdfで出力可能。
+
+
+以下のイントラ機能を追加機能を設計して、改良を提案して
+・ イントラ機能
+左メニューにイントラを追加、
+社員はイントラに記事を作成（申請）可能。
+記事作成ではリンクや画像を張ることができる。
+テキスト形式で記述可能。md形式で記述可能。html形式で記述可能。画像アップロード機能を具備。
+
+記事は管理職が承認可能。
+記事は承認されると、参照可能状態になる。
+ログイン後のダッシュボードに、最近の記事のリンクを5つ掲載。
+記事はタイトルがあり、投稿者名があり、承認者がある。
+記事の閲覧者（既読ユーザ）を確認できる。
+
+
+
+・ TODO機能
+TODOには、実施済み、作業中、未着手のグループがあり、必ずどれか一つに属する。
+ログイン後のダッシュボードに、TODOリストが表示される。
+TODOリストは左メニューから編集可能。
+
+
+
+
+#
+社員情報に追加
+電話番号
+
+緊急連絡先
+氏名：続柄：電話番号
+
+#
+・社員情報に住所、郵便番号を追加
+・最寄り駅追加
+（勤務先の住所・電話番号、勤務先名を追加、通勤経路の候補を提案可能、通勤経路を登録・編集可能）
+・MBO
+作成中の目標を申請するま編集可能に。
+達成水準は定量的に記述するように案内。
+ウェイト100%になるまで、申請できない。
+
+
+・出退勤打刻を出退勤管理に名称変更
+・出退勤のエクスポートで、シート一枚目は件番、（Template/OC作業表に厳密に従って）
+・出退勤のエクスポートの拡張子をxlsxに変更。
+・出退勤のアップロードでエラー
+⚠ 一部エラーがあります
+
+
+新規登録: 0件　更新: 0件
+
+シート「件番」: tuple index out of range
+シート「件番」: tuple index out of range
+シート「件番」: tuple index out of range
+シート「件番」: tuple index out of range
+
+
+・過去の給与明細を確認可能。CSV、PDFでダウンロード可能。
+
+・過去の経費明細を確認可能。CSV、PDFでダウンロード可能。
+
+
+・スキル登録を取得資格登録に名称変更
+・スキルに有効期限を登録可能。失効していれば、失効と表示。
+
+・役職について
+社員は必ず上司が必須。
+・役職追加
+社員、主任、係長、次長、課長、部長、取締役、社長、副社長
+
+
+・ダッシュボードにも、出勤、退勤ボタンを実装して
+
+・社員情報の表示でエラー
+
+Unhandled Runtime Error
+TypeError: Cannot read properties of undefined (reading 'slice')
+
+Source
+src/app/(main)/employees/page.tsx (228:26) @ slice
+
+  226 |       <div className="flex items-center gap-4 p-6 border-b border-gray-100">
+  227 |         <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xl font-bold shrink-0">
+> 228 |           {emp.full_name.slice(0, 1)}
+      |                          ^
+  229 |         </div>
+  230 |         <div>
+  231 |           <h2 className="text-xl font-bold text-gray-800">{emp.full_name}</h2>
+Call Stack
+Show collapsed frames
+
+
+
+# ✅ 2026-04-14 対応済み
+- 出退勤エクスポート: xlsx/csv/pdf の拡張子対応済み（OC作業表テンプレート準拠）
+- 出退勤アップロード: Excelシリアル日付（整数）を from_excel() で変換、1900年代はスキップ
+- 件番シートはアップロード処理でスキップ（OC_SKIP_SHEETS）
+- 社員情報ページの full_name.slice エラー修正（null guard追加）
+- サイドバー: MBO目標管理 → 目標管理/月報
+- スキル: level を文字列フィールドに変更、organizer（主催者）フィールド追加
+  → migration: 0002_skill_level_str_organizer.py
+- 出退勤管理: 前月・次月ナビゲーション追加
+- 出退勤管理: プロジェクトCRUD（作成・編集・削除）フロントエンド実装
+  → ProjectViewSet を ReadOnly → ModelViewSet に変更
+- 社員: アバター画像アップロード（POST /api/v1/employees/{id}/upload-avatar/）
+  → Employee.avatar ImageField 追加、migration: 0003_employee_avatar.py
+
+
+#
+社員アイコンに画像登録可能。アイコンは円形で表示。表示箇所は変更ドラッグで可能。
+
+社員は自分の社員情報を編集可能
+
+出退勤管理は今月のほかに、前月、次月も表示可能。
+
+出退勤管理には労働時間の内訳として、各プロジェクトに使用した時間を記入しなければならない。
+プロジェクトには、件番とプロジェクト名とプロジェクト管理者を持つ。
+このプロジェクトリストは社員が作成、編集、削除可能。
+
+
+
+社員の自スキルの一括登録機能でcsvアップロード可能。
+
+人事職、管理職以上は勘定科目の一括登録ができる。
+CSVでアップロード可能。
+
+django管理サイトは管理サイトに名称変更。管理サイトはシステム管理者がログイン可能。
+
+django管理サイトにあるプロジェクト追加・編集機能をフロントエンドの勤怠管理に実装。
+
+MBO目標管理を名称変更、目標管理／月報
+
+スキル登録のレベルは文字列で入力。主催者も入力項目に追加。
+
+
+給与の項目（推奨追加項目含む）
+基本給:
+技術手当:
+出向手当:
+住宅手当:
+残業手当:
+通勤手当（交通費）:
+家族手当:
+資格手当:
+役職手当:
+特別手当（賞与・臨時手当）:
+皆勤手当:
+精勤手当:
+時間外手当（深夜・休日など）:
+支給合計:
+健康保険料:
+厚生年金:
+雇用保険料:
+介護保険料:
+社会保険料合計:
+財形貯蓄:
+社宅・寮費:
+組合費:
+共済会費:
+持株会拠出金:
+その他控除（弁当代、貸付金返済など）:
+所得税:
+住民税:
+控除合計:
+差引支給額:
+勤怠日数（出勤日数、欠勤日数、有給取得日数など）:
+締め日・支給日:
+支給年月:
+社員番号:
+部署名:
+銀行口座情報（支給先、表示のみ）:
+備考欄:
+
+
+
+
+
+
 
 

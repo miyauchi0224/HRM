@@ -5,18 +5,20 @@ import { useAuthStore } from '@/lib/store'
 import { logout } from '@/lib/auth'
 import {
   Home, Clock, Calendar, Target, Users, DollarSign,
-  Receipt, Award, Bell, Settings, LogOut, Building2
+  Receipt, Award, Bell, Settings, LogOut, Building2, CheckSquare, Newspaper
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
 const navItems = [
   { href: '/',             label: 'ダッシュボード',   icon: Home },
-  { href: '/attendance',   label: '出退勤打刻',       icon: Clock },
+  { href: '/attendance',   label: '出退勤管理',       icon: Clock },
   { href: '/leave',        label: '有給・休暇',       icon: Calendar },
-  { href: '/mbo',          label: 'MBO目標管理',      icon: Target },
+  { href: '/todo',         label: 'TODO',             icon: CheckSquare },
+  { href: '/intra',        label: 'イントラ',         icon: Newspaper },
+  { href: '/mbo',          label: '目標管理/月報',     icon: Target },
   { href: '/salary',       label: '給与明細',         icon: DollarSign },
   { href: '/expense',      label: '経費申請',         icon: Receipt },
-  { href: '/skills',       label: 'スキル管理',       icon: Award },
+  { href: '/skills',       label: '取得資格登録',     icon: Award },
   { href: '/notifications',label: '通知',             icon: Bell },
 ]
 

@@ -1,0 +1,200 @@
+                "columnNumber": 22
+              },
+              {
+                "functionName": "commitHookPassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23153,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23258,
+                "columnNumber": 10
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23369,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23369,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23369,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23369,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23369,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23369,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23255,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23369,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23255,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23255,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23255,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23255,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23369,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",

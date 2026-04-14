@@ -12,7 +12,18 @@
       "Bash(python:*)",
       "Edit",
       "Write",
-      "Bash(grep -E \"\\\\.py$|\\\\.json$|\\\\.txt$\")"
+      "Bash(grep -E \"\\\\.py$|\\\\.json$|\\\\.txt$\")",
+      "Bash(wsl -d Ubuntu bash -c \"docker exec hrm-backend-1 python manage.py check 2>&1 | tail -3\")",
+      "Bash(wsl -d Ubuntu bash -c \"cd /mnt/c/Users/MiyauchiHitoshi/HRM && docker compose up -d 2>&1 | tail -5\")",
+      "Bash(wsl -d Ubuntu bash -c \"docker ps 2>&1 | grep -E 'NAME|hrm'\")",
+      "Bash(wsl -d Ubuntu bash -c \"docker exec hrm-backend-1 python manage.py check 2>&1 | tail -2\")",
+      "Bash(wsl -d Ubuntu bash -c 'docker exec hrm-backend-1 python -c \":*)",
+      "Bash(wsl -d Ubuntu bash -c \"find /mnt/c/Users/MiyauchiHitoshi/HRM -name '*.xlsx' 2>/dev/null\")",
+      "Bash(wsl -d Ubuntu bash -c 'python3 -c \":*)",
+      "Bash(wsl -d Ubuntu bash -c 'cp '\\\\''/mnt/c/Users/MiyauchiHitoshi/HRM/template/OC作業表（名前）2026年度.xlsx'\\\\'' /tmp/oc.xlsx && docker cp /tmp/oc.xlsx hrm-backend-1:/tmp/oc.xlsx && docker exec hrm-backend-1 python -c \":*)",
+      "Bash(docker.exe compose:*)",
+      "Bash(cmd.exe /c \"cd /d C:\\\\\\\\Users\\\\\\\\MiyauchiHitoshi\\\\\\\\HRM && docker compose ps\")",
+      "Bash(powershell.exe -Command \"cd C:\\\\\\\\Users\\\\\\\\MiyauchiHitoshi\\\\\\\\HRM; docker compose ps\")"
     ]
   }
 }

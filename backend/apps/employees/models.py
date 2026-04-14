@@ -32,6 +32,17 @@ class Employee(models.Model):
     employment_type   = models.CharField(max_length=20, choices=EmploymentType.choices, default=EmploymentType.FULL_TIME)
     phone             = models.CharField(max_length=20, blank=True, verbose_name='電話番号')
     personal_email    = models.EmailField(blank=True, verbose_name='個人メール')
+    # 住所
+    zip_code          = models.CharField(max_length=10, blank=True, verbose_name='郵便番号')
+    address           = models.CharField(max_length=200, blank=True, verbose_name='住所')
+    nearest_station   = models.CharField(max_length=100, blank=True, verbose_name='最寄り駅')
+    # 勤務先
+    workplace_name    = models.CharField(max_length=200, blank=True, verbose_name='勤務先名')
+    workplace_address = models.CharField(max_length=200, blank=True, verbose_name='勤務先住所')
+    workplace_phone   = models.CharField(max_length=20, blank=True, verbose_name='勤務先電話番号')
+    # 通勤経路
+    commute_route     = models.TextField(blank=True, verbose_name='通勤経路')
+    avatar            = models.ImageField(upload_to='avatars/', null=True, blank=True, verbose_name='アバター画像')
     managers          = models.ManyToManyField('self', symmetrical=False, blank=True,
                                                related_name='subordinates', verbose_name='上司')
     created_at        = models.DateTimeField(auto_now_add=True)

@@ -1,0 +1,160 @@
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812907.2348468,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812909.7217088,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812912.2294388,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812914.724,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812917.2350128,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812919.7314968,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812922.22818,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812924.7221048,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          }
+        ],
+        "cache": {},
+        "pageref": "page_8",
+        "request": {
+          "method": "GET",
+          "url": "ws://localhost:3000/_next/webpack-hmr",
+          "httpVersion": "HTTP/1.1",
+          "headers": [
+            {
+              "name": "Upgrade",
+              "value": "websocket"
+            },
+            {
+              "name": "Origin",
+              "value": "http://localhost:3000"
+            },
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "ja,en;q=0.9,en-GB;q=0.8,en-US;q=0.7"
+            },
+            {
+              "name": "Pragma",
+              "value": "no-cache"
+            },
+            {
+              "name": "Connection",
+              "value": "Upgrade"
+            },
+            {
+              "name": "Sec-WebSocket-Key",
+              "value": "Vmwg4/dF8glOP5km01fN+Q=="
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": "gzip, deflate, br, zstd"
+            },
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0"
+            },
+            {
+              "name": "Sec-WebSocket-Version",
+              "value": "13"
+            },
+            {
+              "name": "Host",
+              "value": "localhost:3000"
+            },
+            {
+              "name": "Sec-WebSocket-Extensions",
+              "value": "permessage-deflate; client_max_window_bits"
+            }
+          ],
+          "queryString": [],
+          "cookies": [],
+          "headersSize": 664,
+          "bodySize": 0
+        },
+        "response": {
+          "status": 101,
+          "statusText": "Switching Protocols",
+          "httpVersion": "HTTP/1.1",
+          "headers": [
+            {
+              "name": "Upgrade",
+              "value": "websocket"
+            },
+            {
+              "name": "Sec-WebSocket-Accept",
+              "value": "trInegOcY9HCAgguiqNf4hHuxFg="
+            },
+            {
+              "name": "Connection",
+              "value": "Upgrade"
+            }
+          ],
+          "cookies": [],
+          "content": {
+            "size": 0,
+            "mimeType": "x-unknown",
+            "compression": 129
+          },
+          "redirectURL": "",
+          "headersSize": 129,
+          "bodySize": -129,
+          "_transferSize": 0,
+          "_error": null,
+          "_fetchedViaServiceWorker": false
+        },
+        "serverIPAddress": "",
+        "startedDateTime": "2026-04-10T09:21:27.238Z",
+        "time": 37483.50300001039,
+        "timings": {
+          "blocked": -1,
+          "dns": -1,
+          "ssl": -1,
+          "connect": -1,
+          "send": 0,
+          "wait": 37483.50300001039,
+          "receive": 0,
+          "_blocked_queueing": -1
+        }
+      }
+    ]
+  }
+}

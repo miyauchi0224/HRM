@@ -1,0 +1,200 @@
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23369,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23369,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "recursivelyTraversePassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23236,
+                "columnNumber": 6
+              },
+              {
+                "functionName": "commitPassiveMountOnFiber",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23266,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "commitPassiveMountEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 23224,
+                "columnNumber": 2
+              },
+              {
+                "functionName": "flushPassiveEffectsImpl",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 26496,
+                "columnNumber": 2
+              },
+              {
+                "functionName": "flushPassiveEffects",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 26437,
+                "columnNumber": 13
+              },
+              {
+                "functionName": "performSyncWorkOnRoot",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 24869,
+                "columnNumber": 31
+              },
+              {
+                "functionName": "flushSyncWorkAcrossRoots_impl",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 7757,
+                "columnNumber": 12
+              },
+              {
+                "functionName": "flushSyncWorkOnAllRoots",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 7717,
+                "columnNumber": 2
+              },
+              {
+                "functionName": "commitRootImpl",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 26368,
+                "columnNumber": 2
+              },
+              {
+                "functionName": "commitRoot",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 26076,
+                "columnNumber": 4
+              },
+              {
+                "functionName": "commitRootWhenReady",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 24748,
+                "columnNumber": 2
+              },
+              {
+                "functionName": "finishConcurrentRender",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 24713,
+                "columnNumber": 4
+              },
+              {
+                "functionName": "performConcurrentWorkOnRoot",
+                "scriptId": "8383",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                "lineNumber": 24558,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "workLoop",
+                "scriptId": "8385",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js",
+                "lineNumber": 255,
+                "columnNumber": 33
+              },
+              {
+                "functionName": "flushWork",
+                "scriptId": "8385",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js",
+                "lineNumber": 224,
+                "columnNumber": 13
+              },
+              {
+                "functionName": "performWorkUntilDeadline",
+                "scriptId": "8385",
+                "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js",
+                "lineNumber": 533,
+                "columnNumber": 20
+              }
+            ],
+            "parentId": {
+              "id": "275",
+              "debuggerId": "1282642659672338113.-4438415582930486888"
+            }
+          }
+        },
+        "_priority": null,
+        "_resourceType": "websocket",
+        "_webSocketMessages": [
+          {
+            "type": "receive",
+            "time": 1775812887.279356,
+            "opcode": 1,
+            "data": "{\"action\":\"sync\",\"hash\":\"01b33d4c78bcf1c6\",\"errors\":[],\"warnings\":[],\"versionInfo\":{\"staleness\":\"stale-major\",\"expected\":\"16.2.3\",\"installed\":\"14.2.3\"}}"
+          },
+          {
+            "type": "send",
+            "time": 1775812887.280684,
+            "opcode": 1,
+            "data": "{\"event\":\"client-success\",\"clientId\":1775812887172}"
+          },
+          {
+            "type": "send",
+            "time": 1775812889.726687,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812892.2345428,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812894.730933,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812897.229745,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812899.735103,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812902.2222798,
+            "opcode": 1,
+            "data": "{\"event\":\"ping\",\"tree\":[\"\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{},\"/login\",\"refresh\"]}]},null,null,true],\"appDirRoute\":true}"
+          },
+          {
+            "type": "send",
+            "time": 1775812904.7275648,
+            "opcode": 1,

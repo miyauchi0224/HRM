@@ -1,0 +1,200 @@
+{
+  "log": {
+    "version": "1.2",
+    "creator": {
+      "name": "WebInspector",
+      "version": "537.36"
+    },
+    "pages": [
+      {
+        "startedDateTime": "2026-04-10T09:21:23.977Z",
+        "id": "page_8",
+        "title": "http://localhost:3000/login",
+        "pageTimings": {
+          "onContentLoad": 1022.5099999952363,
+          "onLoad": 3044.253000000026
+        }
+      }
+    ],
+    "entries": [
+      {
+        "_connectionId": "26605",
+        "_initiator": {
+          "type": "script",
+          "stack": {
+            "callFrames": [
+              {
+                "functionName": "eval",
+                "scriptId": "8141",
+                "url": "webpack-internal:///(app-pages-browser)/./src/lib/api.ts",
+                "lineNumber": 29,
+                "columnNumber": 37
+              }
+            ],
+            "parent": {
+              "description": "Promise.then",
+              "callFrames": [
+                {
+                  "functionName": "_request",
+                  "scriptId": "8147",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/axios/lib/core/Axios.js",
+                  "lineNumber": 205,
+                  "columnNumber": 26
+                },
+                {
+                  "functionName": "request",
+                  "scriptId": "8147",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/axios/lib/core/Axios.js",
+                  "lineNumber": 50,
+                  "columnNumber": 24
+                },
+                {
+                  "functionName": "Axios.<computed>",
+                  "scriptId": "8147",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/axios/lib/core/Axios.js",
+                  "lineNumber": 253,
+                  "columnNumber": 16
+                },
+                {
+                  "functionName": "wrap",
+                  "scriptId": "8144",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/axios/lib/helpers/bind.js",
+                  "lineNumber": 15,
+                  "columnNumber": 14
+                },
+                {
+                  "functionName": "queryFn",
+                  "scriptId": "8295",
+                  "url": "webpack-internal:///(app-pages-browser)/./src/app/(main)/page.tsx",
+                  "lineNumber": 32,
+                  "columnNumber": 70
+                },
+                {
+                  "functionName": "fetchFn",
+                  "scriptId": "8115",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/@tanstack/query-core/build/modern/query.js",
+                  "lineNumber": 233,
+                  "columnNumber": 13
+                },
+                {
+                  "functionName": "run",
+                  "scriptId": "8117",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/@tanstack/query-core/build/modern/retryer.js",
+                  "lineNumber": 89,
+                  "columnNumber": 48
+                },
+                {
+                  "functionName": "start",
+                  "scriptId": "8117",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/@tanstack/query-core/build/modern/retryer.js",
+                  "lineNumber": 131,
+                  "columnNumber": 8
+                },
+                {
+                  "functionName": "fetch",
+                  "scriptId": "8115",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/@tanstack/query-core/build/modern/query.js",
+                  "lineNumber": 280,
+                  "columnNumber": 39
+                },
+                {
+                  "functionName": "#executeFetch",
+                  "scriptId": "8297",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/@tanstack/query-core/build/modern/queryObserver.js",
+                  "lineNumber": 182,
+                  "columnNumber": 37
+                },
+                {
+                  "functionName": "onSubscribe",
+                  "scriptId": "8297",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/@tanstack/query-core/build/modern/queryObserver.js",
+                  "lineNumber": 55,
+                  "columnNumber": 26
+                },
+                {
+                  "functionName": "subscribe",
+                  "scriptId": "8119",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/@tanstack/query-core/build/modern/subscribable.js",
+                  "lineNumber": 12,
+                  "columnNumber": 9
+                },
+                {
+                  "functionName": "eval",
+                  "scriptId": "8298",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/@tanstack/react-query/build/modern/useBaseQuery.js",
+                  "lineNumber": 50,
+                  "columnNumber": 55
+                },
+                {
+                  "functionName": "subscribeToStore",
+                  "scriptId": "8005",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                  "lineNumber": 12032,
+                  "columnNumber": 9
+                },
+                {
+                  "functionName": "commitHookEffectListMount",
+                  "scriptId": "8005",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                  "lineNumber": 21101,
+                  "columnNumber": 22
+                },
+                {
+                  "functionName": "commitHookPassiveMountEffects",
+                  "scriptId": "8005",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                  "lineNumber": 23153,
+                  "columnNumber": 6
+                },
+                {
+                  "functionName": "commitPassiveMountOnFiber",
+                  "scriptId": "8005",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                  "lineNumber": 23258,
+                  "columnNumber": 10
+                },
+                {
+                  "functionName": "recursivelyTraversePassiveMountEffects",
+                  "scriptId": "8005",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                  "lineNumber": 23236,
+                  "columnNumber": 6
+                },
+                {
+                  "functionName": "commitPassiveMountOnFiber",
+                  "scriptId": "8005",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                  "lineNumber": 23255,
+                  "columnNumber": 8
+                },
+                {
+                  "functionName": "recursivelyTraversePassiveMountEffects",
+                  "scriptId": "8005",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                  "lineNumber": 23236,
+                  "columnNumber": 6
+                },
+                {
+                  "functionName": "commitPassiveMountOnFiber",
+                  "scriptId": "8005",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                  "lineNumber": 23369,
+                  "columnNumber": 8
+                },
+                {
+                  "functionName": "recursivelyTraversePassiveMountEffects",
+                  "scriptId": "8005",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                  "lineNumber": 23236,
+                  "columnNumber": 6
+                },
+                {
+                  "functionName": "commitPassiveMountOnFiber",
+                  "scriptId": "8005",
+                  "url": "webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom.development.js",
+                  "lineNumber": 23369,
+                  "columnNumber": 8
+                },
+                {
+                  "functionName": "recursivelyTraversePassiveMountEffects",
+                  "scriptId": "8005",
