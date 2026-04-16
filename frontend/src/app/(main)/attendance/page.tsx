@@ -36,7 +36,7 @@ export default function AttendancePage() {
   const [activeTab, setActiveTab]       = useState<Tab>('clock')
   const [yearMonth, setYearMonth]       = useState(() => new Date().toISOString().slice(0, 7))
   const [editId, setEditId]             = useState<string | null>(null)
-  const [editData, setEditData]         = useState<EditData>({ clock_in: '', clock_out: '', break_minutes: 60, project: '' })
+  const [editData, setEditData]         = useState<EditData>({ clock_in: '', clock_out: '', break_minutes: 60, project_records: [] })
 
   const today = new Date().toISOString().slice(0, 10)
 
