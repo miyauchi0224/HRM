@@ -22,6 +22,33 @@ class Project(models.Model):
         return f'{self.code} {self.name}'
 
 
+class WorkRule(models.Model):
+    """
+    勤怠ルールマスタ。
+    定時時間・休憩時間などをハードコードせずDBで管理する。
+    複数の就業パターン（本社・出向先など）に対応可能。
+    """
+    name               = models.CharField(max_length=100, unique=True, verbose_name='ルール名')
+    work_start         = models.TimeField(verbose_name='定時開始')
+    work_end           = models.TimeField(verbose_name='定時終了')
+    standard_minutes   = models.PositiveIntegerField(default=480, verbose_name='所定労働時間（分）')
+    break_minutes      = models.PositiveIntegerField(default=60,  verbose_name='標準休憩時間（分）')
+    overtime_threshold = models.PositiveIntegerField(default=480, verbose_name='残業開始基準（分）')
+    is_default         = models.BooleanField(default=False, verbose_name='デフォルトルール')
+
+    class Meta:
+        verbose_name = '勤怠ルール'
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        # デフォルトは1件のみ
+        if self.is_default:
+            WorkRule.objects.exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+
+
 class AttendanceRecord(models.Model):
     class Status(models.TextChoices):
         DRAFT     = 'draft',     '下書き'
@@ -38,6 +65,7 @@ class AttendanceRecord(models.Model):
     note           = models.TextField(blank=True, verbose_name='備考')
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
+    # history      = HistoricalRecords()  # pip install django-simple-history 後に有効化
 
     class Meta:
         verbose_name        = '勤怠記録'

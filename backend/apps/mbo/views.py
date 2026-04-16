@@ -36,7 +36,7 @@ class MBOGoalViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs   = MBOGoal.objects.prefetch_related('reports')
+        qs   = MBOGoal.objects.select_related('employee__user').prefetch_related('reports')
         year   = self.request.query_params.get('year')
         period = self.request.query_params.get('period')
 
@@ -57,11 +57,12 @@ class MBOGoalViewSet(viewsets.ModelViewSet):
         serializer.save(employee=self.request.user.employee)
 
     def _total_weight(self, employee, year, period, exclude_id=None):
-        """同一年度・期のウェイト合計を取得"""
+        """同一年度・期のウェイト合計をDBで集計（aggregate → 単一クエリ）"""
+        from django.db.models import Sum
         qs = MBOGoal.objects.filter(employee=employee, year=year, period=period)
         if exclude_id:
             qs = qs.exclude(id=exclude_id)
-        return sum(g.weight for g in qs)
+        return qs.aggregate(total=Sum('weight'))['total'] or 0
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -79,10 +80,19 @@ class MBOGoalViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['patch'], url_path='submit')
     def submit(self, request, pk=None):
-        """目標を提出"""
+        """目標を提出 — ウェイト合計が 100% でないと申請不可"""
         goal = self.get_object()
         if goal.employee.user != request.user:
             return Response({'error': '自分の目標のみ提出できます'}, status=status.HTTP_403_FORBIDDEN)
+
+        # 同一年度・期のウェイト合計チェック
+        total_weight = self._total_weight(goal.employee, goal.year, goal.period)
+        if total_weight != 100:
+            return Response(
+                {'error': f'ウェイト合計が100%ではありません（現在：{total_weight}%）。全ての目標のウェイト合計が100%になるまで申請できません。'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         goal.status = MBOGoal.Status.SUBMITTED
         goal.save()
         for manager in goal.employee.managers.all():

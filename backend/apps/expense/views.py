@@ -116,7 +116,9 @@ class ExpenseRequestViewSet(viewsets.ModelViewSet):
             return ExpenseRequest.objects.select_related(
                 'applicant', 'approver', 'account_item'
             ).all()
-        return ExpenseRequest.objects.filter(applicant__user=user)
+        return ExpenseRequest.objects.filter(applicant__user=user).select_related(
+            'applicant', 'approver', 'account_item'
+        )
 
     def perform_create(self, serializer):
         employee = self.request.user.employee
@@ -147,7 +149,8 @@ class ExpenseRequestViewSet(viewsets.ModelViewSet):
             req.approved_at = timezone.now()
             msg = '経費申請が承認されました'
         else:
-            req.status = ExpenseRequest.Status.REJECTED
+            req.status          = ExpenseRequest.Status.REJECTED
+            req.rejected_reason = request.data.get('rejected_reason', '')
             msg = '経費申請が却下されました'
 
         req.save()

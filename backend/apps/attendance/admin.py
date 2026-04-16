@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Project, AttendanceRecord, AttendanceModRequest
+from .models import Project, AttendanceRecord, AttendanceProjectRecord, AttendanceModRequest
 
 
 @admin.register(Project)
@@ -9,12 +9,19 @@ class ProjectAdmin(admin.ModelAdmin):
     search_fields = ['code', 'name']
 
 
+class AttendanceProjectRecordInline(admin.TabularInline):
+    model  = AttendanceProjectRecord
+    extra  = 0
+    fields = ['project', 'minutes']
+
+
 @admin.register(AttendanceRecord)
 class AttendanceRecordAdmin(admin.ModelAdmin):
-    list_display  = ['employee', 'date', 'clock_in', 'clock_out', 'status', 'project']
+    list_display  = ['employee', 'date', 'clock_in', 'clock_out', 'status']
     list_filter   = ['status', 'date']
     search_fields = ['employee__last_name', 'employee__first_name']
     date_hierarchy = 'date'
+    inlines       = [AttendanceProjectRecordInline]
 
 
 @admin.register(AttendanceModRequest)
