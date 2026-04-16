@@ -18,17 +18,36 @@ function addMonths(ym: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+interface ProjectEntry {
+  project: string   // project UUID
+  minutes: number
+}
+
+interface EditData {
+  clock_in:        string
+  clock_out:       string
+  break_minutes:   number
+  project_records: ProjectEntry[]
+}
+
 export default function AttendancePage() {
   const qc = useQueryClient()
   const [breakMinutes, setBreakMinutes] = useState(60)
   const [activeTab, setActiveTab]       = useState<Tab>('clock')
   const [yearMonth, setYearMonth]       = useState(() => new Date().toISOString().slice(0, 7))
+  const [editId, setEditId]             = useState<string | null>(null)
+  const [editData, setEditData]         = useState<EditData>({ clock_in: '', clock_out: '', break_minutes: 60, project: '' })
 
   const today = new Date().toISOString().slice(0, 10)
 
   const { data: records = [] } = useQuery<any[]>({
     queryKey: ['attendance', yearMonth],
     queryFn: () => api.get(`/api/v1/attendance/?year_month=${yearMonth}`).then((r) => r.data.results ?? r.data),
+  })
+
+  const { data: projects = [] } = useQuery<any[]>({
+    queryKey: ['projects'],
+    queryFn: () => api.get('/api/v1/attendance/projects/').then((r) => r.data.results ?? r.data),
   })
 
   const todayRecord = records.find((r: any) => r.date === today)
@@ -48,6 +67,67 @@ export default function AttendancePage() {
     mutationFn: () => api.post('/api/v1/attendance/clock-out/', { break_minutes: breakMinutes }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
   })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<EditData> }) =>
+      api.patch(`/api/v1/attendance/${id}/`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['attendance'] })
+      setEditId(null)
+    },
+  })
+
+  const startEdit = (r: any) => {
+    setEditId(r.id)
+    setEditData({
+      clock_in:        r.clock_in  ?? '',
+      clock_out:       r.clock_out ?? '',
+      break_minutes:   r.break_minutes ?? 60,
+      project_records: (r.project_records ?? []).map((pr: any) => ({
+        project: pr.project,
+        minutes: pr.minutes,
+      })),
+    })
+  }
+
+  const saveEdit = () => {
+    if (!editId) return
+    updateMutation.mutate({
+      id: editId,
+      data: {
+        clock_in:        editData.clock_in  || null,
+        clock_out:       editData.clock_out || null,
+        break_minutes:   editData.break_minutes,
+        project_records: editData.project_records.filter((pr) => pr.project),
+      },
+    })
+  }
+
+  // プロジェクト行の操作ヘルパー
+  const addProjectEntry = () =>
+    setEditData((d) => ({ ...d, project_records: [...d.project_records, { project: '', minutes: 0 }] }))
+
+  const updateProjectEntry = (idx: number, field: keyof ProjectEntry, value: string | number) =>
+    setEditData((d) => {
+      const updated = [...d.project_records]
+      updated[idx] = { ...updated[idx], [field]: value }
+      return { ...d, project_records: updated }
+    })
+
+  const removeProjectEntry = (idx: number) =>
+    setEditData((d) => ({ ...d, project_records: d.project_records.filter((_, i) => i !== idx) }))
+
+  // 編集中のプロジェクト合計分数
+  const editTotalPjMinutes = editData.project_records.reduce((s, pr) => s + (Number(pr.minutes) || 0), 0)
+
+  // 編集行の労働時間（clock_in/out から計算）
+  const calcWorkMinutes = (ci: string, co: string, brk: number): number => {
+    if (!ci || !co) return 0
+    const [ch, cm] = ci.split(':').map(Number)
+    const [oh, om] = co.split(':').map(Number)
+    return Math.max(0, (oh * 60 + om) - (ch * 60 + cm) - brk)
+  }
+  const editWorkMinutes = calcWorkMinutes(editData.clock_in, editData.clock_out, editData.break_minutes)
 
   const status = getStatus()
 
@@ -174,37 +254,161 @@ export default function AttendancePage() {
           </div>
 
           {/* 勤怠一覧 */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 overflow-x-auto">
             <h2 className="font-semibold text-gray-700 mb-4">
               {yearMonth.replace('-', '年')}月の勤怠
             </h2>
             {records.length > 0 ? (
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[700px]">
                 <thead>
-                  <tr className="text-gray-500 border-b">
+                  <tr className="text-gray-500 border-b text-xs">
                     <th className="text-left py-2 font-medium">日付</th>
                     <th className="text-left py-2 font-medium">出勤</th>
                     <th className="text-left py-2 font-medium">退勤</th>
+                    <th className="text-left py-2 font-medium">休憩(分)</th>
+                    <th className="text-left py-2 font-medium">プロジェクト</th>
                     <th className="text-left py-2 font-medium">労働時間</th>
                     <th className="text-left py-2 font-medium">残業</th>
+                    <th className="py-2 w-16" />
                   </tr>
                 </thead>
                 <tbody>
                   {records.map((r: any) => (
                     <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-                      <td className="py-2">{r.date}</td>
-                      <td className="py-2">{r.clock_in ?? '—'}</td>
-                      <td className="py-2">{r.clock_out ?? '—'}</td>
-                      <td className="py-2">
-                        {r.work_minutes > 0
-                          ? `${Math.floor(r.work_minutes / 60)}h${r.work_minutes % 60}m`
-                          : '—'}
-                      </td>
-                      <td className={`py-2 ${r.overtime_minutes > 0 ? 'text-orange-500 font-medium' : ''}`}>
-                        {r.overtime_minutes > 0
-                          ? `${Math.floor(r.overtime_minutes / 60)}h${r.overtime_minutes % 60}m`
-                          : '—'}
-                      </td>
+                      {editId === r.id ? (
+                        <>
+                          {/* 編集行 */}
+                          <td className="py-2 pr-2 text-gray-600 text-xs whitespace-nowrap">{r.date}</td>
+                          <td className="py-1 pr-1">
+                            <input
+                              type="time"
+                              value={editData.clock_in}
+                              onChange={(e) => setEditData((d) => ({ ...d, clock_in: e.target.value }))}
+                              className="w-[90px] px-1.5 py-1 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            />
+                          </td>
+                          <td className="py-1 pr-1">
+                            <input
+                              type="time"
+                              value={editData.clock_out}
+                              onChange={(e) => setEditData((d) => ({ ...d, clock_out: e.target.value }))}
+                              className="w-[90px] px-1.5 py-1 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            />
+                          </td>
+                          <td className="py-1 pr-1">
+                            <input
+                              type="number"
+                              min={0}
+                              value={editData.break_minutes}
+                              onChange={(e) => setEditData((d) => ({ ...d, break_minutes: Number(e.target.value) }))}
+                              className="w-[60px] px-1.5 py-1 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            />
+                          </td>
+                          <td className="py-1 pr-1 min-w-[220px]">
+                            <div className="space-y-1">
+                              {editData.project_records.map((pr, idx) => (
+                                <div key={idx} className="flex items-center gap-1">
+                                  <select
+                                    value={pr.project}
+                                    onChange={(e) => updateProjectEntry(idx, 'project', e.target.value)}
+                                    className="w-[120px] px-1 py-1 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                  >
+                                    <option value="">選択</option>
+                                    {projects.map((p: any) => (
+                                      <option key={p.id} value={p.id}>{p.code}</option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={pr.minutes}
+                                    onChange={(e) => updateProjectEntry(idx, 'minutes', Number(e.target.value))}
+                                    className="w-[52px] px-1 py-1 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                    placeholder="分"
+                                  />
+                                  <span className="text-xs text-gray-400">分</span>
+                                  <button
+                                    onClick={() => removeProjectEntry(idx)}
+                                    className="text-gray-300 hover:text-red-400"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              ))}
+                              <button
+                                onClick={addProjectEntry}
+                                className="flex items-center gap-0.5 text-xs text-blue-500 hover:text-blue-700"
+                              >
+                                <Plus size={11} /> 追加
+                              </button>
+                              {editData.project_records.length > 0 && (
+                                <p className={`text-xs mt-0.5 ${editTotalPjMinutes > editWorkMinutes ? 'text-red-500' : 'text-gray-400'}`}>
+                                  合計 {editTotalPjMinutes}分
+                                  {editWorkMinutes > 0 && ` / 労働 ${editWorkMinutes}分`}
+                                </p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-1 text-gray-400 text-xs">—</td>
+                          <td className="py-1 text-gray-400 text-xs">—</td>
+                          <td className="py-1">
+                            <div className="flex gap-1">
+                              <button
+                                onClick={saveEdit}
+                                disabled={updateMutation.isPending}
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
+                                title="保存"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                onClick={() => setEditId(null)}
+                                className="p-1 text-gray-400 hover:bg-gray-100 rounded"
+                                title="キャンセル"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          {/* 表示行 */}
+                          <td className="py-2 text-xs text-gray-600 whitespace-nowrap">{r.date}</td>
+                          <td className="py-2 text-xs">{r.clock_in ?? '—'}</td>
+                          <td className="py-2 text-xs">{r.clock_out ?? '—'}</td>
+                          <td className="py-2 text-xs">{r.break_minutes ?? '—'}</td>
+                          <td className="py-2 text-xs text-gray-500">
+                            {r.project_records?.length > 0
+                              ? r.project_records.map((pr: any) => (
+                                  <span key={pr.id} className="inline-block mr-1 whitespace-nowrap">
+                                    {pr.project_code}
+                                    <span className="text-gray-400 ml-0.5">{pr.minutes}m</span>
+                                  </span>
+                                ))
+                              : '—'}
+                          </td>
+                          <td className="py-2 text-xs">
+                            {r.work_minutes > 0
+                              ? `${Math.floor(r.work_minutes / 60)}h${r.work_minutes % 60}m`
+                              : '—'}
+                          </td>
+                          <td className={`py-2 text-xs ${r.overtime_minutes > 0 ? 'text-orange-500 font-medium' : ''}`}>
+                            {r.overtime_minutes > 0
+                              ? `${Math.floor(r.overtime_minutes / 60)}h${r.overtime_minutes % 60}m`
+                              : '—'}
+                          </td>
+                          <td className="py-2">
+                            <button
+                              onClick={() => startEdit(r)}
+                              className="p-1 text-gray-300 hover:text-blue-500 transition-colors"
+                              title="編集"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -475,7 +679,8 @@ interface Project {
   id: string
   code: string
   name: string
-  manager?: { id: string; full_name: string } | null
+  manager: string | null        // Employee UUID
+  manager_name: string | null
   start_date: string | null
   end_date: string | null
 }
@@ -489,6 +694,11 @@ function ProjectsPanel() {
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ['projects'],
     queryFn: () => api.get('/api/v1/attendance/projects/').then((r) => r.data.results ?? r.data),
+  })
+
+  const { data: employees = [] } = useQuery<any[]>({
+    queryKey: ['employees-list'],
+    queryFn: () => api.get('/api/v1/employees/').then((r) => r.data.results ?? r.data),
   })
 
   const deleteMut = useMutation({
@@ -507,7 +717,7 @@ function ProjectsPanel() {
 
   const startEdit = (p: Project) => {
     setEditId(p.id)
-    setEditData({ code: p.code, name: p.name })
+    setEditData({ code: p.code, name: p.name, manager: p.manager })
   }
 
   return (
@@ -556,7 +766,18 @@ function ProjectsPanel() {
                           className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                         />
                       </td>
-                      <td className="px-4 py-2 text-gray-400">—</td>
+                      <td className="px-4 py-2">
+                        <select
+                          value={editData.manager ?? ''}
+                          onChange={(e) => setEditData((d) => ({ ...d, manager: e.target.value || null }))}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        >
+                          <option value="">なし</option>
+                          {employees.map((e: any) => (
+                            <option key={e.id} value={e.id}>{e.full_name}</option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="px-4 py-2">
                         <div className="flex gap-1.5">
                           <button
@@ -578,7 +799,7 @@ function ProjectsPanel() {
                     <>
                       <td className="px-4 py-3 font-mono text-gray-700">{p.code}</td>
                       <td className="px-4 py-3 text-gray-800">{p.name}</td>
-                      <td className="px-4 py-3 text-gray-500">{p.manager?.full_name ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-500">{p.manager_name ?? '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1.5">
                           <button
@@ -606,6 +827,7 @@ function ProjectsPanel() {
 
       {showNew && (
         <NewProjectModal
+          employees={employees}
           onClose={() => setShowNew(false)}
           onSaved={() => {
             setShowNew(false)
@@ -617,20 +839,38 @@ function ProjectsPanel() {
   )
 }
 
-function NewProjectModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [code, setCode]       = useState('')
-  const [name, setName]       = useState('')
-  const [saving, setSaving]   = useState(false)
-  const [error, setError]     = useState('')
+function NewProjectModal({
+  employees,
+  onClose,
+  onSaved,
+}: {
+  employees: any[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [code,      setCode]      = useState('')
+  const [name,      setName]      = useState('')
+  const [managerId, setManagerId] = useState('')
+  const [saving,    setSaving]    = useState(false)
+  const [error,     setError]     = useState('')
 
   const save = async () => {
     setSaving(true)
     setError('')
     try {
-      await api.post('/api/v1/attendance/projects/', { code, name })
+      await api.post('/api/v1/attendance/projects/', {
+        code,
+        name,
+        manager: managerId || null,
+      })
       onSaved()
     } catch (e: any) {
-      setError(e.response?.data?.code?.[0] ?? e.response?.data?.name?.[0] ?? '登録に失敗しました')
+      setError(
+        e.response?.data?.code?.[0] ??
+        e.response?.data?.name?.[0] ??
+        e.response?.data?.manager?.[0] ??
+        '登録に失敗しました'
+      )
     } finally {
       setSaving(false)
     }
@@ -666,15 +906,35 @@ function NewProjectModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
             />
           </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700 block mb-1">
+              管理者 <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={managerId}
+              onChange={(e) => setManagerId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            >
+              <option value="">選択してください</option>
+              {employees.map((e: any) => (
+                <option key={e.id} value={e.id}>{e.full_name}</option>
+              ))}
+            </select>
+          </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
         <div className="flex gap-3 px-5 pb-5">
-          <button onClick={onClose}
-            className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 font-medium">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 font-medium"
+          >
             キャンセル
           </button>
-          <button onClick={save} disabled={!code.trim() || !name.trim() || saving}
-            className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg text-sm font-medium">
+          <button
+            onClick={save}
+            disabled={!code.trim() || !name.trim() || !managerId || saving}
+            className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg text-sm font-medium"
+          >
             {saving ? '登録中...' : '登録'}
           </button>
         </div>
