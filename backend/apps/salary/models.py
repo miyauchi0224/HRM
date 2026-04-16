@@ -20,15 +20,22 @@ class SalaryGrade(models.Model):
 
 class Allowance(models.Model):
     class AllowanceType(models.TextChoices):
-        HOUSING    = 'housing',    '住宅手当'
-        SECONDMENT = 'secondment', '出向手当'
-        TECHNICAL  = 'technical',  '技術手当'
-        COMMUTE    = 'commute',    '通勤手当'
-        OTHER      = 'other',      'その他手当'
+        HOUSING            = 'housing',            '住宅手当'
+        SECONDMENT         = 'secondment',          '出向手当'
+        TECHNICAL          = 'technical',           '技術手当'
+        COMMUTE            = 'commute',             '通勤手当'
+        FAMILY             = 'family',              '家族手当'
+        CERTIFICATION      = 'certification',       '資格手当'
+        POSITION           = 'position',            '役職手当'
+        SPECIAL            = 'special',             '特別手当'
+        PERFECT_ATTENDANCE = 'perfect_attendance',  '皆勤手当'
+        DILIGENCE          = 'diligence',           '精勤手当'
+        EXTRA_OVERTIME     = 'extra_overtime',      '時間外手当（深夜・休日）'
+        OTHER              = 'other',               'その他手当'
 
     id             = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name           = models.CharField(max_length=100, verbose_name='手当名')
-    allowance_type = models.CharField(max_length=20, choices=AllowanceType.choices)
+    allowance_type = models.CharField(max_length=30, choices=AllowanceType.choices)
     amount         = models.PositiveIntegerField(default=0, verbose_name='金額（円）')
     is_active      = models.BooleanField(default=True)
 
@@ -56,24 +63,59 @@ class Payslip(models.Model):
         DRAFT     = 'draft',     '計算中'
         CONFIRMED = 'confirmed', '確定済'
 
-    id                   = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    employee             = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='payslips')
-    year                 = models.PositiveIntegerField(verbose_name='年')
-    month                = models.PositiveIntegerField(verbose_name='月')
-    base_salary          = models.PositiveIntegerField(default=0, verbose_name='基本給')
-    total_allowances     = models.PositiveIntegerField(default=0, verbose_name='手当合計')
-    overtime_pay         = models.PositiveIntegerField(default=0, verbose_name='残業手当')
-    gross_salary         = models.PositiveIntegerField(default=0, verbose_name='支給合計')
-    health_insurance     = models.PositiveIntegerField(default=0, verbose_name='健康保険料')
-    pension              = models.PositiveIntegerField(default=0, verbose_name='厚生年金')
-    employment_insurance = models.PositiveIntegerField(default=0, verbose_name='雇用保険料')
-    income_tax           = models.PositiveIntegerField(default=0, verbose_name='所得税')
-    resident_tax         = models.PositiveIntegerField(default=0, verbose_name='住民税')
-    total_deductions     = models.PositiveIntegerField(default=0, verbose_name='控除合計')
-    net_salary           = models.PositiveIntegerField(default=0, verbose_name='差引支給額')
-    status               = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
-    payslip_url          = models.URLField(blank=True, verbose_name='PDF URL')
-    created_at           = models.DateTimeField(auto_now_add=True)
+    id       = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='payslips')
+    year     = models.PositiveIntegerField(verbose_name='年')
+    month    = models.PositiveIntegerField(verbose_name='月')
+
+    # ── 支給明細 ────────────────────────────────────────────────────────────
+    base_salary                  = models.PositiveIntegerField(default=0, verbose_name='基本給')
+    technical_allowance          = models.PositiveIntegerField(default=0, verbose_name='技術手当')
+    secondment_allowance         = models.PositiveIntegerField(default=0, verbose_name='出向手当')
+    housing_allowance            = models.PositiveIntegerField(default=0, verbose_name='住宅手当')
+    overtime_pay                 = models.PositiveIntegerField(default=0, verbose_name='残業手当')
+    commute_allowance            = models.PositiveIntegerField(default=0, verbose_name='通勤手当（交通費）')
+    family_allowance             = models.PositiveIntegerField(default=0, verbose_name='家族手当')
+    certification_allowance      = models.PositiveIntegerField(default=0, verbose_name='資格手当')
+    position_allowance           = models.PositiveIntegerField(default=0, verbose_name='役職手当')
+    special_allowance            = models.PositiveIntegerField(default=0, verbose_name='特別手当（賞与・臨時手当）')
+    perfect_attendance_allowance = models.PositiveIntegerField(default=0, verbose_name='皆勤手当')
+    diligence_allowance          = models.PositiveIntegerField(default=0, verbose_name='精勤手当')
+    extra_overtime_pay           = models.PositiveIntegerField(default=0, verbose_name='時間外手当（深夜・休日）')
+    # 後方互換のため残す（個別手当の合計）
+    total_allowances             = models.PositiveIntegerField(default=0, verbose_name='手当合計')
+    gross_salary                 = models.PositiveIntegerField(default=0, verbose_name='支給合計')
+
+    # ── 控除明細 ────────────────────────────────────────────────────────────
+    health_insurance             = models.PositiveIntegerField(default=0, verbose_name='健康保険料')
+    pension                      = models.PositiveIntegerField(default=0, verbose_name='厚生年金')
+    employment_insurance         = models.PositiveIntegerField(default=0, verbose_name='雇用保険料')
+    nursing_insurance            = models.PositiveIntegerField(default=0, verbose_name='介護保険料')
+    social_insurance_total       = models.PositiveIntegerField(default=0, verbose_name='社会保険料合計')
+    property_savings             = models.PositiveIntegerField(default=0, verbose_name='財形貯蓄')
+    company_housing_fee          = models.PositiveIntegerField(default=0, verbose_name='社宅・寮費')
+    union_fee                    = models.PositiveIntegerField(default=0, verbose_name='組合費')
+    mutual_aid_fee               = models.PositiveIntegerField(default=0, verbose_name='共済会費')
+    employee_stock_contribution  = models.PositiveIntegerField(default=0, verbose_name='持株会拠出金')
+    other_deductions             = models.PositiveIntegerField(default=0, verbose_name='その他控除')
+    income_tax                   = models.PositiveIntegerField(default=0, verbose_name='所得税')
+    resident_tax                 = models.PositiveIntegerField(default=0, verbose_name='住民税')
+    total_deductions             = models.PositiveIntegerField(default=0, verbose_name='控除合計')
+
+    net_salary                   = models.PositiveIntegerField(default=0, verbose_name='差引支給額')
+
+    # ── 勤怠情報 ────────────────────────────────────────────────────────────
+    work_days                    = models.PositiveIntegerField(default=0, verbose_name='出勤日数')
+    absence_days                 = models.PositiveIntegerField(default=0, verbose_name='欠勤日数')
+    paid_leave_days              = models.PositiveIntegerField(default=0, verbose_name='有給取得日数')
+
+    # ── 管理情報 ────────────────────────────────────────────────────────────
+    cutoff_date                  = models.DateField(null=True, blank=True, verbose_name='締め日')
+    payment_date                 = models.DateField(null=True, blank=True, verbose_name='支給日')
+    note                         = models.TextField(blank=True, verbose_name='備考')
+    status                       = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    payslip_url                  = models.URLField(blank=True, verbose_name='PDF URL')
+    created_at                   = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name    = '給与明細'
@@ -82,3 +124,28 @@ class Payslip(models.Model):
 
     def __str__(self):
         return f'{self.employee} {self.year}年{self.month}月'
+
+    def recompute_totals(self):
+        """手当合計・社会保険合計・控除合計・支給合計・差引支給額を再計算"""
+        self.total_allowances = (
+            self.technical_allowance + self.secondment_allowance +
+            self.housing_allowance + self.commute_allowance +
+            self.family_allowance + self.certification_allowance +
+            self.position_allowance + self.special_allowance +
+            self.perfect_attendance_allowance + self.diligence_allowance +
+            self.extra_overtime_pay
+        )
+        self.gross_salary = (
+            self.base_salary + self.total_allowances + self.overtime_pay
+        )
+        self.social_insurance_total = (
+            self.health_insurance + self.pension +
+            self.employment_insurance + self.nursing_insurance
+        )
+        self.total_deductions = (
+            self.social_insurance_total + self.property_savings +
+            self.company_housing_fee + self.union_fee + self.mutual_aid_fee +
+            self.employee_stock_contribution + self.other_deductions +
+            self.income_tax + self.resident_tax
+        )
+        self.net_salary = max(0, self.gross_salary - self.total_deductions)

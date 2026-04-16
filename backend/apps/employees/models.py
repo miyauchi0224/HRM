@@ -43,6 +43,13 @@ class Employee(models.Model):
     # 通勤経路
     commute_route     = models.TextField(blank=True, verbose_name='通勤経路')
     avatar            = models.ImageField(upload_to='avatars/', null=True, blank=True, verbose_name='アバター画像')
+    # 銀行口座情報（給与振込先）
+    bank_name         = models.CharField(max_length=100, blank=True, verbose_name='銀行名')
+    bank_branch       = models.CharField(max_length=100, blank=True, verbose_name='支店名')
+    bank_account_type = models.CharField(max_length=20, blank=True, verbose_name='口座種別',
+                                         help_text='普通 / 当座')
+    bank_account_number = models.CharField(max_length=20, blank=True, verbose_name='口座番号')
+    bank_account_holder = models.CharField(max_length=100, blank=True, verbose_name='口座名義')
     managers          = models.ManyToManyField('self', symmetrical=False, blank=True,
                                                related_name='subordinates', verbose_name='上司')
     created_at        = models.DateTimeField(auto_now_add=True)
