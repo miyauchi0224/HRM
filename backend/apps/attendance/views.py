@@ -129,11 +129,12 @@ class AttendanceViewSet(viewsets.ModelViewSet):
 
     def _check_overtime_alert(self, employee, record):
         """月間残業時間が閾値を超えたら通知"""
-        records = AttendanceRecord.objects.filter(
+        # list() で一度だけ評価してループ
+        records = list(AttendanceRecord.objects.filter(
             employee=employee,
             date__year=record.date.year,
             date__month=record.date.month,
-        )
+        ))
         total_overtime = sum(r.overtime_minutes for r in records)
         if total_overtime >= OVERTIME_ALERT_MINUTES:
             Notification.send(
@@ -162,15 +163,16 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         if not employee:
             return Response({'error': '社員情報が登録されていません。管理者にお問い合わせください。'},
                             status=status.HTTP_404_NOT_FOUND)
-        records     = AttendanceRecord.objects.filter(
+        # list() で一度だけDBに問い合わせ（queryset の多重評価を防ぐ）
+        records_list = list(AttendanceRecord.objects.filter(
             employee=employee, date__year=year, date__month=month,
             clock_in__isnull=False, clock_out__isnull=False,
-        )
-        total_work     = sum(r.work_minutes for r in records)
-        total_overtime = sum(r.overtime_minutes for r in records)
+        ))
+        total_work     = sum(r.work_minutes for r in records_list)
+        total_overtime = sum(r.overtime_minutes for r in records_list)
         return Response({
             'year_month':             year_month,
-            'total_work_days':        records.count(),
+            'total_work_days':        len(records_list),
             'total_work_minutes':     total_work,
             'total_overtime_minutes': total_overtime,
             'overtime_alert':         total_overtime >= OVERTIME_ALERT_MINUTES,
@@ -334,8 +336,8 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.units import mm
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        from config.pdf_fonts import register_fonts
+        register_fonts()  # 起動時登録済みだが冪等なので安全
 
         year_month = request.query_params.get('year_month', date.today().strftime('%Y-%m'))
         year, month = map(int, year_month.split('-'))
@@ -352,7 +354,6 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         }
         weekdays = ['月', '火', '水', '木', '金', '土', '日']
 
-        pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
         FONT = 'HeiseiKakuGo-W5'
 
         buf = io.BytesIO()

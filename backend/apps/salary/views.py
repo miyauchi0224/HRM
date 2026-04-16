@@ -345,15 +345,14 @@ class PayslipViewSet(viewsets.ReadOnlyModelViewSet):
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.units import mm
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        from config.pdf_fonts import register_fonts
+        register_fonts()  # 冪等（起動時登録済みの場合は即return）
 
         payslip = self.get_object()
         if not request.user.is_hr and payslip.employee.user != request.user:
             return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
 
         emp = payslip.employee
-        pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
         FONT = 'HeiseiKakuGo-W5'
 
         buf = io.BytesIO()

@@ -22,16 +22,11 @@ services:
       - ./backend:/app
     ports:
       - "8000:8000"
+    env_file:
+      - ./backend/.env
     environment:
-      - DJANGO_ENV=dev
-      - DJANGO_SECRET_KEY=dev-secret-key-change-in-production
-      - DJANGO_DEBUG=True
-      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=hrm
-      - DB_USER=hrm_admin
-      - DB_PASSWORD=localpassword
+      - DB_HOST=db              # docker内ではdbサービス名で接続
+      - DB_PASSWORD=localpassword  # DBコンテナのパスワードに合わせる（.envより優先）
       - CORS_ALLOWED_ORIGINS=http://localhost:3000
     depends_on:
       db:

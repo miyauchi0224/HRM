@@ -9,28 +9,42 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
-const navItems = [
-  { href: '/',             label: 'ダッシュボード',   icon: Home },
-  { href: '/attendance',   label: '出退勤管理',       icon: Clock },
-  { href: '/leave',        label: '有給・休暇',       icon: Calendar },
-  { href: '/todo',         label: 'TODO',             icon: CheckSquare },
-  { href: '/intra',        label: 'イントラ',         icon: Newspaper },
-  { href: '/mbo',          label: '目標管理/月報',     icon: Target },
-  { href: '/salary',       label: '給与明細',         icon: DollarSign },
-  { href: '/expense',      label: '経費申請',         icon: Receipt },
-  { href: '/skills',       label: '取得資格登録',     icon: Award },
-  { href: '/notifications',label: '通知',             icon: Bell },
+// roles が未指定 → 全員に表示
+// roles に配列指定 → その役割のユーザーにのみ表示
+type NavItem = { href: string; label: string; icon: React.ElementType; roles?: string[] }
+
+const navItems: NavItem[] = [
+  { href: '/',              label: 'ダッシュボード', icon: Home },
+  { href: '/attendance',    label: '出退勤管理',     icon: Clock },
+  { href: '/leave',         label: '有給・休暇',     icon: Calendar },
+  { href: '/todo',          label: 'TODO',           icon: CheckSquare },
+  { href: '/intra',         label: 'イントラ',       icon: Newspaper },
+  { href: '/mbo',           label: '目標管理/月報',  icon: Target },
+  { href: '/salary',        label: '給与明細',       icon: DollarSign },
+  { href: '/expense',       label: '経費申請',       icon: Receipt },
+  { href: '/skills',        label: '取得資格登録',   icon: Award },
+  { href: '/notifications', label: '通知',           icon: Bell },
 ]
 
-const managerItems = [
-  { href: '/employees',    label: '社員情報',         icon: Users },
-  { href: '/employees/org-chart', label: '組織図',   icon: Building2 },
+// 管理職（manager・hr・admin）のみ
+const managerItems: NavItem[] = [
+  { href: '/employees',          label: '社員情報', icon: Users },
+  { href: '/employees/org-chart',label: '組織図',   icon: Building2 },
 ]
+
+// システム管理者のみ
+const adminItems: NavItem[] = [
+  { href: '/admin', label: '管理サイト', icon: Settings },
+]
+
+const MANAGER_ROLES = ['manager', 'hr', 'admin']
 
 export default function Sidebar() {
-  const pathname = usePathname()
-  const user     = useAuthStore((s) => s.user)
-  const isManager = user?.role !== 'employee'
+  const pathname  = usePathname()
+  const user      = useAuthStore((s) => s.user)
+  const role      = user?.role ?? 'employee'
+  const isManager = MANAGER_ROLES.includes(role)
+  const isAdmin   = role === 'admin'
 
   return (
     <aside className="w-60 bg-gray-900 text-white flex flex-col min-h-screen">
@@ -42,22 +56,35 @@ export default function Sidebar() {
       {/* ユーザー情報 */}
       <div className="p-4 border-b border-gray-700">
         <p className="text-sm font-medium">{user?.full_name ?? user?.email}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{roleLabel(user?.role)}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{roleLabel(role)}</p>
       </div>
 
       {/* ナビゲーション */}
       <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => (
-          <NavLink key={item.href} {...item} active={pathname === item.href} />
+          <NavLink key={item.href} {...item} active={pathname.startsWith(item.href) && (item.href === '/' ? pathname === '/' : true)} />
         ))}
 
+        {/* 管理職セクション — 権限がある場合のみ表示 */}
         {isManager && (
           <>
             <div className="pt-3 pb-1 px-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">管理者</p>
             </div>
             {managerItems.map((item) => (
-              <NavLink key={item.href} {...item} active={pathname === item.href} />
+              <NavLink key={item.href} {...item} active={pathname.startsWith(item.href)} />
+            ))}
+          </>
+        )}
+
+        {/* 管理サイト — システム管理者のみ */}
+        {isAdmin && (
+          <>
+            <div className="pt-3 pb-1 px-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">システム</p>
+            </div>
+            {adminItems.map((item) => (
+              <NavLink key={item.href} {...item} active={pathname.startsWith(item.href)} />
             ))}
           </>
         )}

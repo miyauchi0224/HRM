@@ -44,7 +44,7 @@ class EmployeeDetailSerializer(serializers.ModelSerializer):
     family_members     = FamilyMemberSerializer(many=True, read_only=True)
     email              = serializers.EmailField(source='user.email', read_only=True)
     role               = serializers.CharField(source='user.role', read_only=True)
-    full_name          = serializers.CharField(source='full_name', read_only=True)
+    full_name          = serializers.CharField(read_only=True)
     is_active          = serializers.SerializerMethodField()
     avatar_url         = serializers.SerializerMethodField()
 
