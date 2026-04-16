@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
@@ -8,6 +9,7 @@ import Link from 'next/link'
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user)
   const qc   = useQueryClient()
+  const [clockError, setClockError] = useState<string | null>(null)
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -27,11 +29,33 @@ export default function DashboardPage() {
 
   const clockInMut = useMutation({
     mutationFn: () => api.post('/api/v1/attendance/clock-in/', {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
+    onSuccess: () => {
+      setClockError(null)
+      qc.invalidateQueries({ queryKey: ['attendance'] })
+      qc.invalidateQueries({ queryKey: ['attendance-summary'] })
+    },
+    onError: (err: any) => {
+      const status = err?.response?.status
+      const data   = err?.response?.data
+      const msg    = data?.error ?? data?.detail ?? (typeof data === 'string' ? data.slice(0, 200) : null)
+                     ?? `出勤打刻に失敗しました（HTTP ${status ?? 'network error'}）`
+      setClockError(msg)
+    },
   })
   const clockOutMut = useMutation({
     mutationFn: () => api.post('/api/v1/attendance/clock-out/', { break_minutes: 60 }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
+    onSuccess: () => {
+      setClockError(null)
+      qc.invalidateQueries({ queryKey: ['attendance'] })
+      qc.invalidateQueries({ queryKey: ['attendance-summary'] })
+    },
+    onError: (err: any) => {
+      const status = err?.response?.status
+      const data   = err?.response?.data
+      const msg    = data?.error ?? data?.detail ?? (typeof data === 'string' ? data.slice(0, 200) : null)
+                     ?? `退勤打刻に失敗しました（HTTP ${status ?? 'network error'}）`
+      setClockError(msg)
+    },
   })
 
   const { data: notifications } = useQuery({
@@ -57,41 +81,48 @@ export default function DashboardPage() {
       </p>
 
       {/* 打刻ボタン */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-700">
-            {isDone ? '本日の勤務完了' : isWorking ? '勤務中' : '本日はまだ出勤していません'}
-          </p>
-          {todayRecord?.clock_in && (
-            <p className="text-xs text-gray-400 mt-0.5">
-              出勤: {todayRecord.clock_in}
-              {todayRecord.clock_out && `　退勤: ${todayRecord.clock_out}`}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-700">
+              {isDone ? '本日の勤務完了' : isWorking ? '勤務中' : '本日はまだ出勤していません'}
             </p>
-          )}
+            {todayRecord?.clock_in && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                出勤: {todayRecord.clock_in}
+                {todayRecord.clock_out && `　退勤: ${todayRecord.clock_out}`}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {!isWorking && !isDone && (
+              <button
+                onClick={() => clockInMut.mutate()}
+                disabled={clockInMut.isPending}
+                className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                <Play size={15} /> {clockInMut.isPending ? '打刻中...' : '出勤'}
+              </button>
+            )}
+            {isWorking && (
+              <button
+                onClick={() => clockOutMut.mutate()}
+                disabled={clockOutMut.isPending}
+                className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                <Square size={15} /> {clockOutMut.isPending ? '打刻中...' : '退勤'}
+              </button>
+            )}
+            {isDone && (
+              <span className="text-xs text-gray-400 bg-gray-100 rounded-lg px-4 py-2.5">勤務終了</span>
+            )}
+          </div>
         </div>
-        <div className="flex gap-2">
-          {!isWorking && !isDone && (
-            <button
-              onClick={() => clockInMut.mutate()}
-              disabled={clockInMut.isPending}
-              className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-sm font-semibold rounded-lg transition-colors"
-            >
-              <Play size={15} /> 出勤
-            </button>
-          )}
-          {isWorking && (
-            <button
-              onClick={() => clockOutMut.mutate()}
-              disabled={clockOutMut.isPending}
-              className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm font-semibold rounded-lg transition-colors"
-            >
-              <Square size={15} /> 退勤
-            </button>
-          )}
-          {isDone && (
-            <span className="text-xs text-gray-400 bg-gray-100 rounded-lg px-4 py-2.5">勤務終了</span>
-          )}
-        </div>
+        {clockError && (
+          <p className="mt-2 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
+            {clockError}
+          </p>
+        )}
       </div>
 
       {/* KPIカード */}

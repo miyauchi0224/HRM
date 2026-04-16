@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from django.http import HttpResponse
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
-from .models import AttendanceRecord, AttendanceModRequest, Project
+from .models import AttendanceRecord, AttendanceProjectRecord, AttendanceModRequest, Project
 from .serializers import (
     AttendanceRecordSerializer, ClockInSerializer, ClockOutSerializer,
     AttendanceModRequestSerializer, ProjectSerializer, AttendanceSummarySerializer
@@ -43,13 +43,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
         instance.save()
 
 
-class AttendanceViewSet(viewsets.ReadOnlyModelViewSet):
+class AttendanceViewSet(viewsets.ModelViewSet):
     serializer_class   = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names  = ['get', 'patch', 'head', 'options']  # PUT・DELETE は不要
 
     def get_queryset(self):
         user = self.request.user
-        qs   = AttendanceRecord.objects.select_related('project', 'employee')
+        qs   = AttendanceRecord.objects.select_related('employee').prefetch_related(
+            'project_records__project'
+        )
         year_month = self.request.query_params.get('year_month')
 
         # 管理職・人事は部下/全員を参照可
@@ -63,6 +66,14 @@ class AttendanceViewSet(viewsets.ReadOnlyModelViewSet):
             year, month = year_month.split('-')
             qs = qs.filter(date__year=year, date__month=month)
         return qs.order_by('-date')
+
+    def perform_update(self, serializer):
+        """自分のレコードのみ編集可。保存時に status を MODIFIED にセット"""
+        obj = self.get_object()
+        if obj.employee.user != self.request.user and not self.request.user.is_manager:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('自身の打刻記録のみ編集できます')
+        serializer.save(status=AttendanceRecord.Status.MODIFIED)
 
     @action(detail=False, methods=['post'], url_path='clock-in')
     def clock_in(self, request):
@@ -81,11 +92,10 @@ class AttendanceViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'error': '本日はすでに出勤打刻済みです'}, status=status.HTTP_409_CONFLICT)
 
         record = AttendanceRecord.objects.create(
-            employee    = employee,
-            date        = today,
-            clock_in    = timezone.localtime().time(),
-            project_id  = serializer.validated_data.get('project_id'),
-            note        = serializer.validated_data.get('note', ''),
+            employee = employee,
+            date     = today,
+            clock_in = timezone.localtime().time(),
+            note     = serializer.validated_data.get('note', ''),
         )
         return Response(AttendanceRecordSerializer(record).data, status=status.HTTP_201_CREATED)
 
@@ -231,7 +241,8 @@ class AttendanceViewSet(viewsets.ReadOnlyModelViewSet):
                     if rec.break_minutes:
                         h, m = divmod(rec.break_minutes, 60)
                         ws.cell(row=row_num, column=COL_BREAK).value = time(h, m)
-                    ws.cell(row=row_num, column=COL_NOTE).value = rec.note or None
+                    pj_codes = ' / '.join(pr.project.code for pr in rec.project_records.all())
+                    ws.cell(row=row_num, column=COL_NOTE).value = pj_codes or rec.note or None
                 else:
                     # データがない日はクリア
                     ws.cell(row=row_num, column=COL_CLOCK_IN).value  = None
@@ -293,7 +304,7 @@ class AttendanceViewSet(viewsets.ReadOnlyModelViewSet):
                 co   = r.clock_out.strftime('%H:%M') if r.clock_out else ''
                 brk  = f'{r.break_minutes // 60}:{r.break_minutes % 60:02d}' if r.break_minutes else ''
                 work = round(r.work_minutes / 60, 2) if r.work_minutes else ''
-                pj   = r.project.code if r.project else ''
+                pj   = ' / '.join(f'{pr.project.code}({pr.minutes}m)' for pr in r.project_records.all())
                 note = r.note or ''
                 if r.clock_in and r.clock_out:
                     total_work += r.work_minutes
@@ -389,7 +400,7 @@ class AttendanceViewSet(viewsets.ReadOnlyModelViewSet):
                 co   = r.clock_out.strftime('%H:%M') if r.clock_out else ''
                 brk  = f'{r.break_minutes // 60}:{r.break_minutes % 60:02d}' if r.break_minutes else ''
                 work = f'{r.work_minutes // 60}:{r.work_minutes % 60:02d}' if r.work_minutes else ''
-                pj   = r.project.code if r.project else ''
+                pj   = ' / '.join(f'{pr.project.code}({pr.minutes}m)' for pr in r.project_records.all())
                 note = r.note or ''
             else:
                 ci = co = brk = work = pj = note = ''
@@ -514,18 +525,28 @@ class AttendanceViewSet(viewsets.ReadOnlyModelViewSet):
             if project_code and str(project_code).strip() not in ('', '-'):
                 project = Project.objects.filter(code=str(project_code).strip()).first()
 
-            _, is_created = AttendanceRecord.objects.update_or_create(
+            record, is_created = AttendanceRecord.objects.update_or_create(
                 employee=employee,
                 date=d,
                 defaults=dict(
                     clock_in=ci,
                     clock_out=co,
                     break_minutes=bm,
-                    project=project,
                     note=str(note) if note else '',
                     status=AttendanceRecord.Status.CONFIRMED if ci and co else AttendanceRecord.Status.DRAFT,
                 )
             )
+            # プロジェクトコードがあれば作業時間を全労働時間として登録
+            if project and ci and co:
+                from datetime import datetime as _dt, date as _d
+                _ci = _dt.combine(_d.today(), ci)
+                _co = _dt.combine(_d.today(), co)
+                work = max(0, int((_co - _ci).total_seconds() / 60) - bm)
+                AttendanceProjectRecord.objects.update_or_create(
+                    attendance=record,
+                    project=project,
+                    defaults={'minutes': work},
+                )
             return is_created
 
         created = 0
