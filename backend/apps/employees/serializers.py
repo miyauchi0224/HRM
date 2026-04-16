@@ -57,6 +57,7 @@ class EmployeeDetailSerializer(serializers.ModelSerializer):
             'employment_type', 'phone', 'personal_email',
             'zip_code', 'address', 'nearest_station',
             'workplace_name', 'workplace_address', 'workplace_phone', 'commute_route',
+            'bank_name', 'bank_branch', 'bank_account_type', 'bank_account_number', 'bank_account_holder',
             'email', 'role', 'is_active', 'avatar_url', 'emergency_contacts', 'family_members',
             'created_at', 'updated_at',
         ]
