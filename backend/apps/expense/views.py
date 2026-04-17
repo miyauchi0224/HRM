@@ -3,7 +3,7 @@ import io
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from apps.accounts.permissions import IsNotCustomer
+from apps.accounts.permissions import IsNotCustomer, IsAccounting
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.http import HttpResponse
@@ -14,19 +14,15 @@ from .serializers import AccountItemSerializer, ExpenseRequestSerializer
 from apps.notifications.models import Notification
 
 
-class IsHR(IsAuthenticated):
-    def has_permission(self, request, view):
-        return super().has_permission(request, view) and request.user.is_hr
-
-
 class AccountItemViewSet(viewsets.ModelViewSet):
+    """勘定科目マスタ：参照は社員以上、編集は経理以上"""
     queryset           = AccountItem.objects.filter(is_active=True)
     serializer_class   = AccountItemSerializer
     permission_classes = [IsNotCustomer]
 
     def get_permissions(self):
         if self.request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
-            return [IsHR()]
+            return [IsAccounting()]
         return [IsAuthenticated()]
 
     @action(detail=False, methods=['get'], url_path='export-csv')
@@ -136,7 +132,7 @@ class ExpenseRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'], url_path='approve')
     def approve(self, request, pk=None):
         """PATCH /api/v1/expense/requests/{id}/approve/"""
-        if not request.user.is_manager:
+        if not request.user.is_supervisor:
             return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
 
         req = self.get_object()

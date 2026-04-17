@@ -3,7 +3,7 @@ from decimal import Decimal
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from apps.accounts.permissions import IsNotCustomer
+from apps.accounts.permissions import IsNotCustomer, IsHR, IsAccounting
 from rest_framework.response import Response
 from django.http import HttpResponse
 from django.utils import timezone
@@ -25,12 +25,8 @@ NURSING_INSURANCE_RATE    = Decimal('0.0091')   # 介護保険 0.91%（40歳以�
 OVERTIME_RATE             = Decimal('1.25')     # 残業割増率
 
 
-class IsHR(IsAuthenticated):
-    def has_permission(self, request, view):
-        return super().has_permission(request, view) and request.user.is_hr
-
-
 class SalaryGradeViewSet(viewsets.ModelViewSet):
+    """給与等級マスタ：参照は社員以上、編集は人事以上"""
     queryset           = SalaryGrade.objects.all()
     serializer_class   = SalaryGradeSerializer
     permission_classes = [IsNotCustomer]
@@ -58,7 +54,7 @@ class EmployeeAllowanceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_hr:
+        if user.is_accounting:  # 経理・人事・管理者は全員分を参照可
             emp_id = self.request.query_params.get('employee_id')
             if emp_id:
                 return EmployeeAllowance.objects.filter(employee_id=emp_id)
@@ -72,7 +68,7 @@ class PayslipViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_hr:
+        if user.is_accounting:  # 経理・人事・管理者は全員分を参照可
             emp_id = self.request.query_params.get('employee_id')
             qs = Payslip.objects.select_related('employee')
             if emp_id:
@@ -80,7 +76,7 @@ class PayslipViewSet(viewsets.ReadOnlyModelViewSet):
             return qs
         return Payslip.objects.filter(employee__user=user).select_related('employee')
 
-    @action(detail=False, methods=['post'], url_path='calculate', permission_classes=[IsHR])
+    @action(detail=False, methods=['post'], url_path='calculate', permission_classes=[IsAccounting])
     def calculate(self, request):
         """
         POST /api/v1/salary/payslips/calculate/
@@ -143,7 +139,7 @@ class PayslipViewSet(viewsets.ReadOnlyModelViewSet):
         from openpyxl.utils import get_column_letter
 
         payslip = self.get_object()
-        if not request.user.is_hr and payslip.employee.user != request.user:
+        if not request.user.is_accounting and payslip.employee.user != request.user:
             return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
 
         emp = payslip.employee
@@ -350,7 +346,7 @@ class PayslipViewSet(viewsets.ReadOnlyModelViewSet):
         register_fonts()  # 冪等（起動時登録済みの場合は即return）
 
         payslip = self.get_object()
-        if not request.user.is_hr and payslip.employee.user != request.user:
+        if not request.user.is_accounting and payslip.employee.user != request.user:
             return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
 
         emp = payslip.employee
