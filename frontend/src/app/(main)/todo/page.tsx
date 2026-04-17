@@ -6,7 +6,6 @@ import { CheckSquare, Plus, X, Calendar, Pencil, BookOpen, GripVertical, Send } 
 
 // ===== 型定義 =====
 type TodoStatus = 'not_started' | 'in_progress' | 'done'
-type Tab = 'kanban' | 'daily'
 
 interface Project { id: string; code: string; name: string }
 interface TodoItem {
@@ -37,10 +36,9 @@ const COLUMNS: { key: TodoStatus; label: string; color: string; headerColor: str
   { key: 'done',        label: '実施済み', color: 'bg-green-50',  headerColor: 'bg-green-200 text-green-800' },
 ]
 
-// ===== メインページ =====
+// ===== メインページ（上部カンバン・下部日報の縦並び）=====
 export default function TodoPage() {
   const qc = useQueryClient()
-  const [tab, setTab]           = useState<Tab>('kanban')
   const [showForm, setShowForm] = useState(false)
   const [dragOverCol, setDragOverCol] = useState<TodoStatus | null>(null)
   const draggingId = useRef<string | null>(null)
@@ -65,10 +63,8 @@ export default function TodoPage() {
   })
 
   // ===== HTML5 Drag & Drop ハンドラ =====
-  const handleDragStart = (id: string) => {
-    draggingId.current = id
-  }
-  const handleDragOver = (colKey: TodoStatus, e: React.DragEvent) => {
+  const handleDragStart = (id: string) => { draggingId.current = id }
+  const handleDragOver  = (colKey: TodoStatus, e: React.DragEvent) => {
     e.preventDefault()
     setDragOverCol(colKey)
   }
@@ -76,52 +72,29 @@ export default function TodoPage() {
     const id = draggingId.current
     if (!id) return
     const item = todos.find((t) => t.id === id)
-    if (item && item.status !== colKey) {
-      moveMutation.mutate({ id, status: colKey })
-    }
+    if (item && item.status !== colKey) moveMutation.mutate({ id, status: colKey })
     draggingId.current = null
     setDragOverCol(null)
   }
-  const handleDragEnd = () => {
-    draggingId.current = null
-    setDragOverCol(null)
-  }
+  const handleDragEnd = () => { draggingId.current = null; setDragOverCol(null) }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-          <CheckSquare size={22} /> TODOリスト
-        </h1>
-        {tab === 'kanban' && (
+    <div className="space-y-8">
+      {/* ===== 上部: カンバン ===== */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <CheckSquare size={22} /> TODO／日報
+          </h1>
           <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
-            <Plus size={16} /> 追加
+            <Plus size={16} /> TODO追加
           </button>
-        )}
-      </div>
+        </div>
 
-      {/* タブ */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
-        {([['kanban', 'カンバン'], ['daily', '日報']] as [Tab, string][]).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === key
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'kanban' ? (
-        isLoading ? (
+        {isLoading ? (
           <p className="text-gray-400 text-sm">読み込み中...</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -166,10 +139,17 @@ export default function TodoPage() {
               )
             })}
           </div>
-        )
-      ) : (
-        <DailyReportTab />
-      )}
+        )}
+      </section>
+
+      {/* ===== 下部: 日報 ===== */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <BookOpen size={20} className="text-gray-600" />
+          <h2 className="text-xl font-bold text-gray-800">日報</h2>
+        </div>
+        <DailyReportSection />
+      </section>
 
       {showForm && (
         <NewTodoModal
@@ -415,11 +395,11 @@ function NewTodoModal({
   )
 }
 
-// ===== 日報タブ =====
-function DailyReportTab() {
+// ===== 日報セクション（別の日も参照・編集・提出可能）=====
+function DailyReportSection() {
   const qc = useQueryClient()
   const today = new Date().toISOString().slice(0, 10)
-  const [date, setDate]     = useState(today)
+  const [date, setDate]         = useState(today)
   const [content, setContent]   = useState('')
   const [tomorrow, setTomorrow] = useState('')
   const [issues, setIssues]     = useState('')
@@ -428,18 +408,13 @@ function DailyReportTab() {
   const { data: reports = [] } = useQuery<DailyReport[]>({
     queryKey: ['daily-reports'],
     queryFn: () => api.get('/api/v1/todo/daily-reports/').then((r) => r.data.results ?? r.data),
-    onSuccess: (data: DailyReport[]) => {
-      const existing = data.find((r) => r.report_date === today)
-      if (existing) {
-        setContent(existing.content)
-        setTomorrow(existing.tomorrow)
-        setIssues(existing.issues)
-      }
-    },
-  } as any)
+  })
 
-  const todayReport = reports.find((r) => r.report_date === date)
+  // 選択中の日付のレポート
+  const currentReport = reports.find((r) => r.report_date === date)
+  const isSubmitted   = currentReport?.status === 'submitted'
 
+  // 日付を変更したとき、その日のデータをフォームにセット
   const handleDateChange = (d: string) => {
     setDate(d)
     const existing = reports.find((r) => r.report_date === d)
@@ -448,17 +423,34 @@ function DailyReportTab() {
     setIssues(existing?.issues ?? '')
   }
 
+  // reports がロードされたら今日のデータをセット（初回のみ）
+  const initialized = useRef(false)
+  if (!initialized.current && reports.length > 0) {
+    const existing = reports.find((r) => r.report_date === today)
+    if (existing) {
+      setContent(existing.content)
+      setTomorrow(existing.tomorrow)
+      setIssues(existing.issues)
+    }
+    initialized.current = true
+  }
+
   const save = async (submit = false) => {
     setSaving(true)
     try {
-      if (todayReport) {
-        await api.patch(`/api/v1/todo/daily-reports/${todayReport.id}/`, { content, tomorrow, issues })
-        if (submit) await api.patch(`/api/v1/todo/daily-reports/${todayReport.id}/submit/`)
+      let reportId = currentReport?.id
+      if (reportId) {
+        await api.patch(`/api/v1/todo/daily-reports/${reportId}/`, { content, tomorrow, issues })
       } else {
-        const res = await api.post('/api/v1/todo/daily-reports/', { report_date: date, content, tomorrow, issues })
-        if (submit) await api.patch(`/api/v1/todo/daily-reports/${res.data.id}/submit/`)
+        const res = await api.post('/api/v1/todo/daily-reports/', {
+          report_date: date, content, tomorrow, issues,
+        })
+        reportId = res.data.id
       }
-      qc.invalidateQueries({ queryKey: ['daily-reports'] })
+      if (submit && reportId) {
+        await api.patch(`/api/v1/todo/daily-reports/${reportId}/submit/`)
+      }
+      await qc.invalidateQueries({ queryKey: ['daily-reports'] })
     } catch {
       alert('保存に失敗しました')
     } finally {
@@ -468,24 +460,32 @@ function DailyReportTab() {
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-center gap-3 mb-6">
-        <BookOpen size={18} className="text-gray-500" />
-        <h2 className="font-semibold text-gray-700">日報</h2>
-        <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)}
-          className="ml-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm" />
+      {/* 日付選択 + 既存日報のショートカット */}
+      <div className="flex items-center gap-3 mb-4">
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => handleDateChange(e.target.value)}
+          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+        />
+        <span className="text-xs text-gray-400">日付を選んで参照・編集できます</span>
       </div>
 
+      {/* 提出済み日報のリスト */}
       {reports.length > 0 && (
-        <div className="mb-6 flex flex-wrap gap-2">
-          {reports.map((r) => (
-            <button key={r.id} onClick={() => handleDateChange(r.report_date)}
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[...reports].sort((a, b) => b.report_date.localeCompare(a.report_date)).map((r) => (
+            <button
+              key={r.id}
+              onClick={() => handleDateChange(r.report_date)}
               className={`px-3 py-1 text-xs rounded-full border transition-colors ${
                 r.report_date === date
                   ? 'bg-blue-600 text-white border-blue-600'
                   : r.status === 'submitted'
                   ? 'bg-green-50 text-green-700 border-green-300'
                   : 'bg-gray-50 text-gray-600 border-gray-200'
-              }`}>
+              }`}
+            >
               {new Date(r.report_date).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
               {r.status === 'submitted' && ' ✓'}
             </button>
@@ -493,41 +493,70 @@ function DailyReportTab() {
         </div>
       )}
 
+      {/* 入力フォーム */}
       <div className="space-y-4 bg-white rounded-xl border border-gray-200 p-6">
+        {isSubmitted && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-green-600 font-medium">✓ 提出済み</p>
+            <button
+              onClick={() => { /* 再編集のため提出解除は現状未実装 */ }}
+              className="text-xs text-gray-400"
+            >
+              {date} の日報
+            </button>
+          </div>
+        )}
+
         <div>
           <label className="text-sm font-medium text-gray-700 block mb-1">
-            本日の作業内容 <span className="text-red-500">*</span>
+            作業内容 <span className="text-red-500">*</span>
           </label>
-          <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={5}
-            disabled={todayReport?.status === 'submitted'}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none disabled:bg-gray-50"
-            placeholder="本日取り組んだ作業内容を記入してください" />
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={5}
+            disabled={isSubmitted}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none disabled:bg-gray-50 disabled:text-gray-600"
+            placeholder="本日取り組んだ作業内容を記入してください"
+          />
         </div>
         <div>
           <label className="text-sm font-medium text-gray-700 block mb-1">明日の予定</label>
-          <textarea value={tomorrow} onChange={(e) => setTomorrow(e.target.value)} rows={3}
-            disabled={todayReport?.status === 'submitted'}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none disabled:bg-gray-50"
-            placeholder="明日取り組む予定の作業" />
+          <textarea
+            value={tomorrow}
+            onChange={(e) => setTomorrow(e.target.value)}
+            rows={3}
+            disabled={isSubmitted}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none disabled:bg-gray-50 disabled:text-gray-600"
+            placeholder="明日取り組む予定の作業"
+          />
         </div>
         <div>
           <label className="text-sm font-medium text-gray-700 block mb-1">課題・連絡事項</label>
-          <textarea value={issues} onChange={(e) => setIssues(e.target.value)} rows={2}
-            disabled={todayReport?.status === 'submitted'}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none disabled:bg-gray-50"
-            placeholder="課題や上長への連絡事項" />
+          <textarea
+            value={issues}
+            onChange={(e) => setIssues(e.target.value)}
+            rows={2}
+            disabled={isSubmitted}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none disabled:bg-gray-50 disabled:text-gray-600"
+            placeholder="課題や上長への連絡事項"
+          />
         </div>
 
-        {todayReport?.status === 'submitted' ? (
-          <p className="text-sm text-green-600 font-medium">✓ 提出済みです</p>
-        ) : (
+        {!isSubmitted && (
           <div className="flex gap-3">
-            <button onClick={() => save(false)} disabled={!content.trim() || saving}
-              className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            <button
+              onClick={() => save(false)}
+              disabled={!content.trim() || saving}
+              className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            >
               {saving ? '保存中...' : '下書き保存'}
             </button>
-            <button onClick={() => save(true)} disabled={!content.trim() || saving}
-              className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+            <button
+              onClick={() => save(true)}
+              disabled={!content.trim() || saving}
+              className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+            >
               <Send size={14} />
               {saving ? '提出中...' : '提出'}
             </button>
