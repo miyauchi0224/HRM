@@ -13,6 +13,7 @@ import { clsx } from 'clsx'
 // roles に配列指定 → その役割のユーザーにのみ表示
 type NavItem = { href: string; label: string; icon: React.ElementType; roles?: string[] }
 
+// 社員・管理職共通メニュー
 const navItems: NavItem[] = [
   { href: '/',              label: 'ダッシュボード', icon: Home },
   { href: '/attendance',    label: '出退勤管理',     icon: Clock },
@@ -24,6 +25,13 @@ const navItems: NavItem[] = [
   { href: '/expense',       label: '経費申請',       icon: Receipt },
   { href: '/skills',        label: '取得資格登録',   icon: Award },
   { href: '/notifications', label: '通知',           icon: Bell },
+]
+
+// 顧客専用メニュー（社内情報は閲覧不可）
+const customerNavItems: NavItem[] = [
+  { href: '/',              label: 'ホーム',   icon: Home },
+  { href: '/intra',         label: 'イントラ', icon: Newspaper },
+  { href: '/notifications', label: '通知',     icon: Bell },
 ]
 
 // 管理職（manager・hr・admin）のみ
@@ -40,9 +48,10 @@ const MANAGER_ROLES = ['manager', 'hr', 'admin']
 export default function Sidebar() {
   const pathname  = usePathname()
   const user      = useAuthStore((s) => s.user)
-  const role      = user?.role ?? 'employee'
-  const isManager = MANAGER_ROLES.includes(role)
-  const isAdmin   = role === 'admin'
+  const role       = user?.role ?? 'employee'
+  const isManager  = MANAGER_ROLES.includes(role)
+  const isAdmin    = role === 'admin'
+  const isCustomer = role === 'customer'
 
   return (
     <aside className="w-60 bg-gray-900 text-white flex flex-col min-h-screen">
@@ -59,12 +68,12 @@ export default function Sidebar() {
 
       {/* ナビゲーション */}
       <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => (
+        {(isCustomer ? customerNavItems : navItems).map((item) => (
           <NavLink key={item.href} {...item} active={pathname.startsWith(item.href) && (item.href === '/' ? pathname === '/' : true)} />
         ))}
 
-        {/* 管理職セクション — 権限がある場合のみ表示 */}
-        {isManager && (
+        {/* 管理職セクション — 管理職以上かつ顧客でない場合のみ表示 */}
+        {isManager && !isCustomer && (
           <>
             <div className="pt-3 pb-1 px-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">管理者</p>
@@ -133,6 +142,7 @@ function roleLabel(role?: string) {
     manager:  '管理職',
     hr:       '人事担当',
     admin:    'システム管理者',
+    customer: '顧客',
   }
   return map[role ?? ''] ?? ''
 }

@@ -3,6 +3,7 @@ import io
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from apps.accounts.permissions import IsNotCustomer
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.http import HttpResponse
@@ -21,7 +22,7 @@ class IsHR(IsAuthenticated):
 class AccountItemViewSet(viewsets.ModelViewSet):
     queryset           = AccountItem.objects.filter(is_active=True)
     serializer_class   = AccountItemSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_permissions(self):
         if self.request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
@@ -108,7 +109,7 @@ class AccountItemViewSet(viewsets.ModelViewSet):
 
 class ExpenseRequestViewSet(viewsets.ModelViewSet):
     serializer_class   = ExpenseRequestSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         user = self.request.user

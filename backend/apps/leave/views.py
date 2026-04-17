@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from apps.accounts.permissions import IsNotCustomer
 from rest_framework.response import Response
 from django.utils import timezone
 
@@ -11,7 +12,7 @@ from apps.notifications.models import Notification
 
 class LeaveBalanceViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class   = LeaveBalanceSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         user = self.request.user
@@ -25,7 +26,7 @@ class LeaveBalanceViewSet(viewsets.ReadOnlyModelViewSet):
 
 class LeaveRequestViewSet(viewsets.ModelViewSet):
     serializer_class   = LeaveRequestSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         user = self.request.user

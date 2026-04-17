@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from apps.accounts.permissions import IsNotCustomer
 from django.shortcuts import get_object_or_404
 from .models import Employee, EmergencyContact
 from .serializers import (
@@ -18,7 +19,7 @@ class IsHROrAdmin(IsAuthenticated):
 
 
 class EmployeeViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         user  = self.request.user

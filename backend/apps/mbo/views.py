@@ -3,6 +3,7 @@ import boto3
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from apps.accounts.permissions import IsNotCustomer
 from rest_framework.response import Response
 from django.conf import settings
 
@@ -32,7 +33,7 @@ def _call_bedrock(prompt: str) -> str:
 
 class MBOGoalViewSet(viewsets.ModelViewSet):
     serializer_class   = MBOGoalSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         user = self.request.user
@@ -141,7 +142,7 @@ class MBOGoalViewSet(viewsets.ModelViewSet):
 
 class MBOReportViewSet(viewsets.ModelViewSet):
     serializer_class   = MBOReportSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         user    = self.request.user
@@ -216,7 +217,7 @@ class MBOReportViewSet(viewsets.ModelViewSet):
 
 class DailyReportViewSet(viewsets.ModelViewSet):
     serializer_class   = DailyReportSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         user = self.request.user

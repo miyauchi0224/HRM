@@ -3,6 +3,7 @@ from decimal import Decimal
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from apps.accounts.permissions import IsNotCustomer
 from rest_framework.response import Response
 from django.http import HttpResponse
 from django.utils import timezone
@@ -32,7 +33,7 @@ class IsHR(IsAuthenticated):
 class SalaryGradeViewSet(viewsets.ModelViewSet):
     queryset           = SalaryGrade.objects.all()
     serializer_class   = SalaryGradeSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_permissions(self):
         if self.request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
@@ -43,7 +44,7 @@ class SalaryGradeViewSet(viewsets.ModelViewSet):
 class AllowanceViewSet(viewsets.ModelViewSet):
     queryset           = Allowance.objects.all()
     serializer_class   = AllowanceSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_permissions(self):
         if self.request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
@@ -53,7 +54,7 @@ class AllowanceViewSet(viewsets.ModelViewSet):
 
 class EmployeeAllowanceViewSet(viewsets.ModelViewSet):
     serializer_class   = EmployeeAllowanceSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         user = self.request.user
@@ -67,7 +68,7 @@ class EmployeeAllowanceViewSet(viewsets.ModelViewSet):
 
 class PayslipViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class   = PayslipSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         user = self.request.user

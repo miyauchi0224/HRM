@@ -7,6 +7,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
+from apps.accounts.permissions import IsNotCustomer
 from rest_framework.response import Response
 from django.http import HttpResponse
 from django.utils import timezone
@@ -32,7 +33,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     DELETE /api/v1/attendance/projects/{id}/  - 削除（論理削除）
     """
     serializer_class   = ProjectSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         return Project.objects.filter(is_active=True)
@@ -45,7 +46,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
 class AttendanceViewSet(viewsets.ModelViewSet):
     serializer_class   = AttendanceRecordSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
     http_method_names  = ['get', 'patch', 'head', 'options']  # PUT・DELETE は不要
 
     def get_queryset(self):
@@ -692,7 +693,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
 
 class AttendanceModRequestViewSet(viewsets.ModelViewSet):
     serializer_class   = AttendanceModRequestSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         user = self.request.user
