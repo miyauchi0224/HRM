@@ -7,7 +7,8 @@ import { Clock, Calendar, Target, Bell, CheckSquare, Newspaper, Pin, Play, Squar
 import Link from 'next/link'
 
 export default function DashboardPage() {
-  const user = useAuthStore((s) => s.user)
+  const user       = useAuthStore((s) => s.user)
+  const isCustomer = user?.role === 'customer'
   const qc   = useQueryClient()
   const [clockError, setClockError] = useState<string | null>(null)
 
@@ -80,8 +81,8 @@ export default function DashboardPage() {
         おはようございます、{user?.full_name ?? 'ゲスト'}さん
       </p>
 
-      {/* 打刻ボタン */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+      {/* 打刻ボタン（顧客には非表示）*/}
+      {!isCustomer && <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-gray-700">
@@ -123,9 +124,9 @@ export default function DashboardPage() {
             {clockError}
           </p>
         )}
-      </div>
+      </div>}
 
-      {/* KPIカード */}
+      {/* KPIカード（顧客には通知のみ表示）*/}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <KpiCard
           icon={<Clock className="text-blue-500" size={20} />}

@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from apps.accounts.permissions import IsNotCustomer
 from rest_framework.response import Response
 
 from .models import Skill
@@ -11,7 +12,7 @@ from apps.notifications.models import Notification
 
 class SkillViewSet(viewsets.ModelViewSet):
     serializer_class   = SkillSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         user = self.request.user

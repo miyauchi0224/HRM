@@ -26,6 +26,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         MANAGER  = 'manager',  '管理職'
         HR       = 'hr',       '人事担当'
         ADMIN    = 'admin',    'システム管理者'
+        CUSTOMER = 'customer', '顧客'
 
     id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email        = models.EmailField(unique=True)
@@ -60,3 +61,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def is_admin(self):
         return self.role == self.Role.ADMIN
+
+    @property
+    def is_customer(self):
+        """顧客ロール（社内の勤怠・給与等を閲覧不可）"""
+        return self.role == self.Role.CUSTOMER

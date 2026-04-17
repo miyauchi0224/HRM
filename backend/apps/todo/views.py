@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from apps.accounts.permissions import IsNotCustomer
 from rest_framework.response import Response
 
 from .models import TodoItem, DailyReport
@@ -9,7 +10,7 @@ from .serializers import TodoItemSerializer, DailyReportSerializer
 
 class TodoItemViewSet(viewsets.ModelViewSet):
     serializer_class   = TodoItemSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         return TodoItem.objects.filter(
@@ -40,7 +41,7 @@ class DailyReportViewSet(viewsets.ModelViewSet):
     PATCH /api/v1/todo/daily-reports/{id}/submit/  提出
     """
     serializer_class   = DailyReportSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
         qs = DailyReport.objects.filter(employee__user=self.request.user)
