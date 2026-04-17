@@ -17,7 +17,7 @@ const navItems: NavItem[] = [
   { href: '/',              label: 'ダッシュボード', icon: Home },
   { href: '/attendance',    label: '出退勤管理',     icon: Clock },
   { href: '/leave',         label: '有給・休暇',     icon: Calendar },
-  { href: '/todo',          label: 'TODO',           icon: CheckSquare },
+  { href: '/todo',          label: 'TODO／日報',     icon: CheckSquare },
   { href: '/intra',         label: 'イントラ',       icon: Newspaper },
   { href: '/mbo',           label: '目標管理/月報',  icon: Target },
   { href: '/salary',        label: '給与明細',       icon: DollarSign },
@@ -32,10 +32,8 @@ const managerItems: NavItem[] = [
   { href: '/employees/org-chart',label: '組織図',   icon: Building2 },
 ]
 
-// システム管理者のみ
-const adminItems: NavItem[] = [
-  { href: '/admin', label: '管理サイト', icon: Settings },
-]
+// システム管理者のみ（Django 管理サイトへの外部リンク）
+const ADMIN_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000') + '/admin/'
 
 const MANAGER_ROLES = ['manager', 'hr', 'admin']
 
@@ -77,15 +75,21 @@ export default function Sidebar() {
           </>
         )}
 
-        {/* 管理サイト — システム管理者のみ */}
+        {/* 管理サイト — システム管理者のみ（Djangoバックエンドへの外部リンク）*/}
         {isAdmin && (
           <>
             <div className="pt-3 pb-1 px-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">システム</p>
             </div>
-            {adminItems.map((item) => (
-              <NavLink key={item.href} {...item} active={pathname.startsWith(item.href)} />
-            ))}
+            <a
+              href={ADMIN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm text-gray-400 hover:text-white hover:bg-gray-700"
+            >
+              <Settings size={16} />
+              管理サイト
+            </a>
           </>
         )}
       </nav>

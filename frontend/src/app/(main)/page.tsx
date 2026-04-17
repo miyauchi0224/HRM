@@ -143,6 +143,7 @@ export default function DashboardPage() {
           icon={<Bell className="text-yellow-500" size={20} />}
           label="未読通知"
           value={notifications ? `${notifications.unread_count}件` : '—'}
+          href="/notifications"
         />
         <KpiCard
           icon={<Target className="text-purple-500" size={20} />}
