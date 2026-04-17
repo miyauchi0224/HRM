@@ -5,15 +5,14 @@ import { useAuthStore } from '@/lib/store'
 import { logout } from '@/lib/auth'
 import {
   Home, Clock, Calendar, Target, Users, DollarSign,
-  Receipt, Award, Bell, Settings, LogOut, Building2, CheckSquare, Newspaper
+  Receipt, Award, Bell, Settings, LogOut, Building2,
+  CheckSquare, Newspaper, Calculator,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
-// roles が未指定 → 全員に表示
-// roles に配列指定 → その役割のユーザーにのみ表示
-type NavItem = { href: string; label: string; icon: React.ElementType; roles?: string[] }
+type NavItem = { href: string; label: string; icon: React.ElementType }
 
-// 社員・管理職共通メニュー
+// ===== 社員・上司・管理職 共通メニュー =====
 const navItems: NavItem[] = [
   { href: '/',              label: 'ダッシュボード', icon: Home },
   { href: '/attendance',    label: '出退勤管理',     icon: Clock },
@@ -27,31 +26,40 @@ const navItems: NavItem[] = [
   { href: '/notifications', label: '通知',           icon: Bell },
 ]
 
-// 顧客専用メニュー（社内情報は閲覧不可）
+// ===== 顧客専用メニュー（社内情報は閲覧不可）=====
 const customerNavItems: NavItem[] = [
   { href: '/',              label: 'ホーム',   icon: Home },
   { href: '/intra',         label: 'イントラ', icon: Newspaper },
   { href: '/notifications', label: '通知',     icon: Bell },
 ]
 
-// 管理職（manager・hr・admin）のみ
-const managerItems: NavItem[] = [
+// ===== 上司・管理職・人事・経理・管理者（is_supervisor）が見る管理メニュー =====
+const supervisorItems: NavItem[] = [
   { href: '/employees',          label: '社員情報', icon: Users },
   { href: '/employees/org-chart',label: '組織図',   icon: Building2 },
+]
+
+// ===== 経理・人事・管理者（is_accounting）が見る経理メニュー =====
+const accountingItems: NavItem[] = [
+  { href: '/salary/manage', label: '給与計算', icon: Calculator },
 ]
 
 // システム管理者のみ（Django 管理サイトへの外部リンク）
 const ADMIN_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000') + '/admin/'
 
-const MANAGER_ROLES = ['manager', 'hr', 'admin']
+// 上司以上のロール
+const SUPERVISOR_ROLES = ['supervisor', 'manager', 'hr', 'accounting', 'admin']
+// 経理以上のロール
+const ACCOUNTING_ROLES = ['accounting', 'hr', 'admin']
 
 export default function Sidebar() {
-  const pathname  = usePathname()
-  const user      = useAuthStore((s) => s.user)
-  const role       = user?.role ?? 'employee'
-  const isManager  = MANAGER_ROLES.includes(role)
-  const isAdmin    = role === 'admin'
-  const isCustomer = role === 'customer'
+  const pathname    = usePathname()
+  const user        = useAuthStore((s) => s.user)
+  const role        = user?.role ?? 'employee'
+  const isCustomer  = role === 'customer'
+  const isSupervisor = SUPERVISOR_ROLES.includes(role)
+  const isAccounting = ACCOUNTING_ROLES.includes(role)
+  const isAdmin     = role === 'admin'
 
   return (
     <aside className="w-60 bg-gray-900 text-white flex flex-col min-h-screen">
@@ -68,23 +76,40 @@ export default function Sidebar() {
 
       {/* ナビゲーション */}
       <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+        {/* 通常メニュー（顧客は専用メニュー）*/}
         {(isCustomer ? customerNavItems : navItems).map((item) => (
-          <NavLink key={item.href} {...item} active={pathname.startsWith(item.href) && (item.href === '/' ? pathname === '/' : true)} />
+          <NavLink
+            key={item.href}
+            {...item}
+            active={pathname.startsWith(item.href) && (item.href === '/' ? pathname === '/' : true)}
+          />
         ))}
 
-        {/* 管理職セクション — 管理職以上かつ顧客でない場合のみ表示 */}
-        {isManager && !isCustomer && (
+        {/* 上司セクション（上司・管理職・人事・経理・管理者）*/}
+        {isSupervisor && !isCustomer && (
           <>
             <div className="pt-3 pb-1 px-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">管理者</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">管理</p>
             </div>
-            {managerItems.map((item) => (
+            {supervisorItems.map((item) => (
               <NavLink key={item.href} {...item} active={pathname.startsWith(item.href)} />
             ))}
           </>
         )}
 
-        {/* 管理サイト — システム管理者のみ（Djangoバックエンドへの外部リンク）*/}
+        {/* 経理セクション（経理・人事・管理者）*/}
+        {isAccounting && !isCustomer && (
+          <>
+            <div className="pt-3 pb-1 px-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">経理</p>
+            </div>
+            {accountingItems.map((item) => (
+              <NavLink key={item.href} {...item} active={pathname.startsWith(item.href)} />
+            ))}
+          </>
+        )}
+
+        {/* 管理サイト — システム管理者のみ */}
         {isAdmin && (
           <>
             <div className="pt-3 pb-1 px-2">
@@ -138,11 +163,13 @@ function NavLink({ href, label, icon: Icon, active }: {
 
 function roleLabel(role?: string) {
   const map: Record<string, string> = {
-    employee: '社員',
-    manager:  '管理職',
-    hr:       '人事担当',
-    admin:    'システム管理者',
-    customer: '顧客',
+    employee:   '社員',
+    supervisor: '上司',
+    manager:    '管理職',
+    hr:         '人事',
+    accounting: '経理',
+    admin:      'システム管理者',
+    customer:   '顧客',
   }
   return map[role ?? ''] ?? ''
 }

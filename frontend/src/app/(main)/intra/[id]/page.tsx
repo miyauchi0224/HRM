@@ -2,8 +2,6 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import {
@@ -345,22 +343,58 @@ function ArticleBody({ content, format }: { content: string; format: 'text' | 'm
   if (format === 'html') {
     return (
       <div
-        className="prose prose-sm max-w-none prose-headings:font-bold prose-a:text-blue-600 prose-img:rounded-lg prose-img:max-w-full"
+        className="prose prose-sm max-w-none"
         dangerouslySetInnerHTML={{ __html: content }}
       />
     )
   }
 
   if (format === 'markdown') {
+    // react-markdown の代わりにシンプルな変換（外部パッケージ不要）
+    const html = simpleMarkdownToHtml(content)
     return (
-      <div className="prose prose-sm max-w-none prose-headings:font-bold prose-a:text-blue-600 prose-code:bg-gray-100 prose-code:rounded prose-code:px-1 prose-pre:bg-gray-900 prose-pre:text-gray-100">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-      </div>
+      <div
+        className="prose prose-sm max-w-none"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
     )
   }
 
-  // text
+  // text（プレーンテキスト）
   return (
     <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{content}</p>
   )
+}
+
+/**
+ * 最低限の Markdown → HTML 変換（外部ライブラリ不要）
+ * 対応: 見出し・太字・斜体・コード・リンク・リスト・水平線・改行
+ */
+function simpleMarkdownToHtml(md: string): string {
+  return md
+    // コードブロック（```...```）
+    .replace(/```([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 rounded p-3 overflow-x-auto text-xs"><code>$1</code></pre>')
+    // インラインコード
+    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 rounded px-1 text-sm font-mono">$1</code>')
+    // 見出し
+    .replace(/^### (.+)$/gm, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>')
+    .replace(/^## (.+)$/gm,  '<h2 class="text-xl font-bold mt-5 mb-2">$1</h2>')
+    .replace(/^# (.+)$/gm,   '<h1 class="text-2xl font-bold mt-6 mb-3">$1</h1>')
+    // 水平線
+    .replace(/^---$/gm, '<hr class="my-4 border-gray-200" />')
+    // 太字・斜体
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g,     '<em>$1</em>')
+    // リンク
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-600 underline" target="_blank" rel="noopener">$1</a>')
+    // リスト（- item）
+    .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+    // 番号付きリスト（1. item）
+    .replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>')
+    // 改行 → <br>（連続する改行は段落区切り）
+    .replace(/\n\n/g, '</p><p class="mb-3">')
+    .replace(/\n/g, '<br />')
+    // 全体を段落で包む
+    .replace(/^/, '<p class="mb-3">')
+    .replace(/$/, '</p>')
 }

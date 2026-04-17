@@ -16,7 +16,7 @@ class LeaveBalanceViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_manager:
+        if user.is_supervisor:
             emp_id = self.request.query_params.get('employee_id')
             if emp_id:
                 return LeaveBalance.objects.filter(employee_id=emp_id)
@@ -30,7 +30,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_manager:
+        if user.is_supervisor:
             return LeaveRequest.objects.select_related('employee', 'approver').all()
         return LeaveRequest.objects.filter(employee__user=user)
 
@@ -50,7 +50,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'], url_path='approve')
     def approve(self, request, pk=None):
         """PATCH /api/v1/leave/requests/{id}/approve/"""
-        if not request.user.is_manager:
+        if not request.user.is_supervisor:
             return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
 
         req = self.get_object()
