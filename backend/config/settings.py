@@ -38,6 +38,14 @@ LOCAL_APPS = [
     'apps.notifications',
     'apps.todo',
     'apps.intra',
+    'apps.approval',
+    'apps.chat',
+    'apps.recruitment',
+    'apps.assets',
+    'apps.evaluation',
+    'apps.learning',
+    'apps.analytics',
+    'apps.ai_assistant',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -137,6 +145,7 @@ AWS_REGION = config('AWS_REGION', default='ap-northeast-1')
 S3_STORAGE_BUCKET = config('S3_STORAGE_BUCKET', default='')
 S3_TEMPLATE_BUCKET = config('S3_TEMPLATE_BUCKET', default='')
 BEDROCK_MODEL_ID = config('BEDROCK_MODEL_ID', default='anthropic.claude-sonnet-4-5-20250929-v1:0')
+ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
 
 # ── API ドキュメント (drf-spectacular) ───────────────────────────
 SPECTACULAR_SETTINGS = {

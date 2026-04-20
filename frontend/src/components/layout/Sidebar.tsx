@@ -6,7 +6,8 @@ import { logout } from '@/lib/auth'
 import {
   Home, Clock, Calendar, Target, Users, DollarSign,
   Receipt, Award, Bell, Settings, LogOut, Building2,
-  CheckSquare, Newspaper, Calculator,
+  CheckSquare, Newspaper, Calculator, FileText, MessageSquare,
+  UserPlus, Package, BarChart2, Star, BookOpen, Bot,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -24,6 +25,10 @@ const navItems: NavItem[] = [
   { href: '/expense',       label: '経費申請',       icon: Receipt },
   { href: '/skills',        label: '取得資格登録',   icon: Award },
   { href: '/notifications', label: '通知',           icon: Bell },
+  { href: '/approval',     label: '電子稟議',       icon: FileText },
+  { href: '/chat',         label: 'チャット',       icon: MessageSquare },
+  { href: '/evaluation',   label: '360度評価',      icon: Star },
+  { href: '/learning',     label: '研修・e-Learning', icon: BookOpen },
 ]
 
 // ===== 顧客専用メニュー（社内情報は閲覧不可）=====
@@ -37,11 +42,18 @@ const customerNavItems: NavItem[] = [
 const supervisorItems: NavItem[] = [
   { href: '/employees',          label: '社員情報', icon: Users },
   { href: '/employees/org-chart',label: '組織図',   icon: Building2 },
+  { href: '/assets',             label: '資産管理', icon: Package },
 ]
 
 // ===== 経理・人事・管理者（is_accounting）が見る経理メニュー =====
 const accountingItems: NavItem[] = [
   { href: '/salary/manage', label: '給与計算', icon: Calculator },
+]
+
+// ===== 人事・管理者が見る人事メニュー =====
+const hrItems: NavItem[] = [
+  { href: '/recruitment', label: '採用管理',        icon: UserPlus },
+  { href: '/analytics',   label: '分析ダッシュボード', icon: BarChart2 },
 ]
 
 // システム管理者のみ（Django 管理サイトへの外部リンク）
@@ -59,6 +71,7 @@ export default function Sidebar() {
   const isCustomer  = role === 'customer'
   const isSupervisor = SUPERVISOR_ROLES.includes(role)
   const isAccounting = ACCOUNTING_ROLES.includes(role)
+  const isHR = ['hr', 'admin'].includes(role)
   const isAdmin     = role === 'admin'
 
   return (
@@ -104,6 +117,18 @@ export default function Sidebar() {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">経理</p>
             </div>
             {accountingItems.map((item) => (
+              <NavLink key={item.href} {...item} active={pathname.startsWith(item.href)} />
+            ))}
+          </>
+        )}
+
+        {/* 人事セクション（人事・管理者）*/}
+        {isHR && !isCustomer && (
+          <>
+            <div className="pt-3 pb-1 px-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">人事</p>
+            </div>
+            {hrItems.map((item) => (
               <NavLink key={item.href} {...item} active={pathname.startsWith(item.href)} />
             ))}
           </>
