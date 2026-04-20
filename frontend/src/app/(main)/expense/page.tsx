@@ -1,8 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
-import { Receipt, Plus, X } from 'lucide-react'
+import { useAuthStore } from '@/lib/store'
+import { Receipt, Plus, X, Upload, Download } from 'lucide-react'
 
 interface AccountItem { id: string; code: string; name: string; category: string }
 interface ExpenseRequest {
@@ -22,8 +23,15 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   cancelled: { label: '取消',   color: 'bg-gray-100 text-gray-500' },
 }
 
+const ACCOUNTING_ROLES = ['hr', 'accounting', 'admin']
+
 export default function ExpensePage() {
-  const [showNew, setShowNew] = useState(false)
+  const user         = useAuthStore((s) => s.user)
+  const isAccounting = ACCOUNTING_ROLES.includes(user?.role ?? '')
+  const [showNew, setShowNew]           = useState(false)
+  const [uploading, setUploading]       = useState(false)
+  const [uploadResult, setUploadResult] = useState<any>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const qc = useQueryClient()
 
   const { data: requests = [], isLoading } = useQuery<ExpenseRequest[]>({
@@ -39,6 +47,33 @@ export default function ExpensePage() {
   const totalPending  = requests.filter((r) => r.status === 'pending').reduce((s, r) => s + r.amount, 0)
   const totalApproved = requests.filter((r) => r.status === 'approved').reduce((s, r) => s + r.amount, 0)
 
+  const downloadTemplate = async () => {
+    const res = await api.get('/api/v1/expense/requests/template-csv/', { responseType: 'blob' })
+    const a = document.createElement('a')
+    a.href = window.URL.createObjectURL(new Blob([res.data]))
+    a.download = 'expense_upload_template.csv'
+    a.click()
+  }
+
+  const uploadCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadResult(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await api.post('/api/v1/expense/requests/import-csv/', form)
+      setUploadResult(res.data)
+      qc.invalidateQueries({ queryKey: ['expense-requests'] })
+    } catch {
+      alert('アップロードに失敗しました')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -52,6 +87,58 @@ export default function ExpensePage() {
           <Plus size={16} /> 申請する
         </button>
       </div>
+
+      {/* 一括登録セクション（経理・人事・管理者のみ）*/}
+      {isAccounting && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+          <h2 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+            <Upload size={16} /> 経費申請 一括登録
+          </h2>
+          <div className="flex flex-wrap gap-3 items-center">
+            <button
+              onClick={downloadTemplate}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+            >
+              <Download size={15} /> テンプレートCSVダウンロード
+            </button>
+            <label className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
+              uploading
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}>
+              <Upload size={15} />
+              {uploading ? 'アップロード中...' : 'CSVをアップロード'}
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                disabled={uploading}
+                onChange={uploadCsv}
+              />
+            </label>
+          </div>
+          {uploadResult && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg text-sm">
+              <p className="font-medium text-gray-800 mb-1">
+                登録: {uploadResult.created}件
+                {uploadResult.errors > 0 && (
+                  <span className="text-red-600 ml-2">エラー: {uploadResult.errors}件</span>
+                )}
+              </p>
+              {uploadResult.error_details?.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {uploadResult.error_details.map((e: any, i: number) => (
+                    <li key={i} className="text-red-600 text-xs">
+                      {e.row}行目: {e.error}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* サマリー */}
       <div className="grid grid-cols-2 gap-4 mb-6">

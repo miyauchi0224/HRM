@@ -1,9 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { DollarSign, Download, FileText } from 'lucide-react'
+import { DollarSign, Download, FileText, Upload } from 'lucide-react'
 
 interface Payslip {
   id: string
@@ -72,12 +72,18 @@ function Row({ label, value, bold, color }: {
   )
 }
 
-export default function SalaryPage() {
-  const user = useAuthStore((s) => s.user)
-  const isHR = user?.role === 'hr' || user?.role === 'admin'
+const ACCOUNTING_ROLES = ['hr', 'accounting', 'admin']
 
-  const [selected, setSelected]     = useState<Payslip | null>(null)
+export default function SalaryPage() {
+  const user        = useAuthStore((s) => s.user)
+  const isHR        = user?.role === 'hr' || user?.role === 'admin'
+  const isAccounting = ACCOUNTING_ROLES.includes(user?.role ?? '')
+
+  const [selected, setSelected]       = useState<Payslip | null>(null)
   const [downloading, setDownloading] = useState<string | null>(null)
+  const [uploading, setUploading]     = useState(false)
+  const [uploadResult, setUploadResult] = useState<any>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const { data: payslips = [], isLoading } = useQuery<Payslip[]>({
     queryKey: ['payslips'],
@@ -108,11 +114,90 @@ export default function SalaryPage() {
     }
   }
 
+  const downloadTemplate = async () => {
+    const res = await api.get('/api/v1/salary/payslips/template-csv/', { responseType: 'blob' })
+    const a = document.createElement('a')
+    a.href = window.URL.createObjectURL(new Blob([res.data]))
+    a.download = 'payslip_upload_template.csv'
+    a.click()
+  }
+
+  const uploadCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadResult(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await api.post('/api/v1/salary/payslips/import-csv/', form)
+      setUploadResult(res.data)
+    } catch {
+      alert('アップロードに失敗しました')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
         <DollarSign size={22} /> 給与明細
       </h1>
+
+      {/* 一括登録セクション（経理・人事・管理者のみ）*/}
+      {isAccounting && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+          <h2 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+            <Upload size={16} /> 給与明細 一括登録
+          </h2>
+          <div className="flex flex-wrap gap-3 items-center">
+            <button
+              onClick={downloadTemplate}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+            >
+              <Download size={15} /> テンプレートCSVダウンロード
+            </button>
+            <label className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
+              uploading
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}>
+              <Upload size={15} />
+              {uploading ? 'アップロード中...' : 'CSVをアップロード'}
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                disabled={uploading}
+                onChange={uploadCsv}
+              />
+            </label>
+          </div>
+          {/* アップロード結果 */}
+          {uploadResult && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg text-sm">
+              <p className="font-medium text-gray-800 mb-1">
+                登録: {uploadResult.created}件　更新: {uploadResult.updated}件
+                {uploadResult.errors > 0 && (
+                  <span className="text-red-600 ml-2">エラー: {uploadResult.errors}件</span>
+                )}
+              </p>
+              {uploadResult.error_details?.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {uploadResult.error_details.map((e: any, i: number) => (
+                    <li key={i} className="text-red-600 text-xs">
+                      {e.row}行目: {e.error}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 明細一覧 */}

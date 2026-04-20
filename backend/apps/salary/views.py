@@ -1,7 +1,11 @@
+import csv
 import io
+from datetime import date
 from decimal import Decimal
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from apps.accounts.permissions import IsNotCustomer, IsHR, IsAccounting
 from rest_framework.response import Response
@@ -75,6 +79,144 @@ class PayslipViewSet(viewsets.ReadOnlyModelViewSet):
                 return qs.filter(employee_id=emp_id)
             return qs
         return Payslip.objects.filter(employee__user=user).select_related('employee')
+
+    @action(detail=False, methods=['get'], url_path='template-csv', permission_classes=[IsAccounting])
+    def template_csv(self, request):
+        """
+        GET /api/v1/salary/payslips/template-csv/
+        給与明細一括登録用 CSV テンプレートをダウンロード（経理・人事・管理者のみ）
+        """
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow([
+            '社員番号', '年', '月',
+            '基本給', '技術手当', '出向手当', '住宅手当', '残業手当',
+            '通勤手当', '家族手当', '資格手当', '役職手当', '特別手当',
+            '皆勤手当', '精勤手当', '時間外手当',
+            '健康保険料', '厚生年金', '雇用保険料', '介護保険料',
+            '財形貯蓄', '社宅寮費', '組合費', '共済会費', '持株会拠出金',
+            'その他控除', '所得税', '住民税',
+            '出勤日数', '欠勤日数', '有給取得日数',
+            '締め日', '支給日', '備考',
+        ])
+        # サンプル行
+        today = date.today()
+        writer.writerow([
+            'EMP001', today.year, today.month,
+            300000, 20000, 0, 15000, 10000,
+            12000, 5000, 0, 0, 0,
+            0, 0, 0,
+            15000, 27450, 1800, 0,
+            0, 0, 0, 0, 0,
+            0, 8000, 12000,
+            20, 0, 0,
+            f'{today.year}/{today.month:02d}/15',
+            f'{today.year}/{today.month:02d}/25',
+            '',
+        ])
+        response = HttpResponse(buf.getvalue(), content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="payslip_upload_template.csv"'
+        return response
+
+    @action(detail=False, methods=['post'], url_path='import-csv',
+            parser_classes=[MultiPartParser, FormParser],
+            permission_classes=[IsAccounting])
+    def import_csv(self, request):
+        """
+        POST /api/v1/salary/payslips/import-csv/
+        給与明細を CSV で一括登録・更新（経理・人事・管理者のみ）
+
+        同一社員・年・月の明細が既存の場合は上書き更新する。
+        合計は自動計算される（総支給額・総控除額・差引支給額）。
+        """
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': 'ファイルが指定されていません'}, status=status.HTTP_400_BAD_REQUEST)
+
+        decoded = file.read().decode('utf-8-sig')
+        reader  = csv.DictReader(io.StringIO(decoded))
+
+        created = 0
+        updated = 0
+        errors  = []
+
+        def to_int(val, default=0):
+            v = str(val).strip().replace(',', '')
+            return int(v) if v else default
+
+        def parse_date(val):
+            if not val or not val.strip():
+                return None
+            return date.fromisoformat(val.strip().replace('/', '-'))
+
+        for i, row in enumerate(reader, start=2):
+            try:
+                emp_number = row.get('社員番号', '').strip()
+                year  = int(row.get('年', '').strip())
+                month = int(row.get('月', '').strip())
+                if not emp_number:
+                    raise ValueError('社員番号は必須です')
+
+                employee = Employee.objects.filter(employee_number=emp_number).first()
+                if not employee:
+                    raise ValueError(f'社員番号が見つかりません: {emp_number}')
+
+                payslip, is_new = Payslip.objects.get_or_create(
+                    employee=employee, year=year, month=month,
+                )
+                # 支給項目
+                payslip.base_salary                 = to_int(row.get('基本給', 0))
+                payslip.technical_allowance         = to_int(row.get('技術手当', 0))
+                payslip.secondment_allowance        = to_int(row.get('出向手当', 0))
+                payslip.housing_allowance           = to_int(row.get('住宅手当', 0))
+                payslip.overtime_pay                = to_int(row.get('残業手当', 0))
+                payslip.commute_allowance           = to_int(row.get('通勤手当', 0))
+                payslip.family_allowance            = to_int(row.get('家族手当', 0))
+                payslip.certification_allowance     = to_int(row.get('資格手当', 0))
+                payslip.position_allowance          = to_int(row.get('役職手当', 0))
+                payslip.special_allowance           = to_int(row.get('特別手当', 0))
+                payslip.perfect_attendance_allowance= to_int(row.get('皆勤手当', 0))
+                payslip.diligence_allowance         = to_int(row.get('精勤手当', 0))
+                payslip.extra_overtime_pay          = to_int(row.get('時間外手当', 0))
+                # 控除項目
+                payslip.health_insurance            = to_int(row.get('健康保険料', 0))
+                payslip.pension                     = to_int(row.get('厚生年金', 0))
+                payslip.employment_insurance        = to_int(row.get('雇用保険料', 0))
+                payslip.nursing_insurance           = to_int(row.get('介護保険料', 0))
+                payslip.property_savings            = to_int(row.get('財形貯蓄', 0))
+                payslip.company_housing_fee         = to_int(row.get('社宅寮費', 0))
+                payslip.union_fee                   = to_int(row.get('組合費', 0))
+                payslip.mutual_aid_fee              = to_int(row.get('共済会費', 0))
+                payslip.employee_stock_contribution = to_int(row.get('持株会拠出金', 0))
+                payslip.other_deductions            = to_int(row.get('その他控除', 0))
+                payslip.income_tax                  = to_int(row.get('所得税', 0))
+                payslip.resident_tax                = to_int(row.get('住民税', 0))
+                # 勤怠
+                payslip.work_days      = to_int(row.get('出勤日数', 0))
+                payslip.absence_days   = to_int(row.get('欠勤日数', 0))
+                payslip.paid_leave_days= to_int(row.get('有給取得日数', 0))
+                # 管理情報
+                payslip.cutoff_date  = parse_date(row.get('締め日'))
+                payslip.payment_date = parse_date(row.get('支給日'))
+                payslip.note         = row.get('備考', '').strip()
+
+                payslip.recompute_totals()
+                payslip.save()
+
+                if is_new:
+                    created += 1
+                else:
+                    updated += 1
+
+            except Exception as e:
+                errors.append({'row': i, 'error': str(e)})
+
+        return Response({
+            'created': created,
+            'updated': updated,
+            'errors':  len(errors),
+            'error_details': errors,
+        })
 
     @action(detail=False, methods=['post'], url_path='calculate', permission_classes=[IsAccounting])
     def calculate(self, request):

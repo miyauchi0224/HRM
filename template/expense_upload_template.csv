@@ -1,0 +1,4 @@
+社員番号,経費区分,支払方法,勘定科目コード,金額,費用発生日,内容説明,領収書URL
+EMP001,transportation,reimbursement,1002,2500,2026/04/10,客先への交通費（渋谷→新宿）,
+EMP001,general,reimbursement,1001,5000,2026/04/12,チームランチ代（接待）,
+EMP002,transportation,advance,1002,15000,2026/04/15,出張 東京→大阪（新幹線）,https://example.com/receipt/123.pdf
