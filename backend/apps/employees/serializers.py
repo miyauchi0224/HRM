@@ -27,6 +27,7 @@ class EmployeeListSerializer(serializers.ModelSerializer):
         data['full_name']   = instance.full_name
         data['is_active']   = instance.retire_date is None
         data['avatar_url']  = self._build_avatar_url(instance)
+        data['user']        = {'id': str(instance.user_id), 'email': instance.user.email}
         return data
 
     def _build_avatar_url(self, instance):
