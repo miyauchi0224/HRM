@@ -138,36 +138,82 @@ export default function LoginForm() {
 
           {/* 規約本文（折りたたみ）*/}
           {showTos && (
-            <div className="mb-4 max-h-48 overflow-y-auto text-xs text-gray-600 leading-relaxed bg-white rounded border border-gray-200 p-3 space-y-2">
-              <p className="font-semibold text-gray-800">業務情報の機密保持に関する同意事項</p>
-              <p>
-                本人事管理システム（以下「本アプリ」）は、<strong>{COMPANY_NAME}</strong>（以下「当社」）の
-                人事・給与・勤怠・その他業務に関わる情報（以下「業務情報」）を管理するシステムです。
-              </p>
-              <p>本アプリにログインすることで、利用者は以下の事項に同意したものとみなします。</p>
-              <ol className="list-decimal list-inside space-y-1 pl-2">
-                <li>
-                  本アプリが当社の業務情報（社員個人情報・給与情報・勤怠情報等）を保有していることを理解し、
-                  これらの情報が厳重に管理されていることを認識する。
-                </li>
-                <li>
-                  本アプリを通じてアクセス・閲覧・取得した業務情報は、業務上の必要性がある場合に限り使用し、
-                  第三者への漏洩・無断複製・目的外使用を一切行わない。
-                </li>
-                <li>
-                  本アプリへのログイン情報（メールアドレス・パスワード）は自己の責任において厳重に管理し、
-                  他者と共有しない。
-                </li>
-                <li>
-                  本アプリの利用にあたっては、当社の情報セキュリティポリシーおよび
-                  関係法令（個人情報保護法等）を遵守する。
-                </li>
-                <li>
-                  上記に違反した場合、当社が定める就業規則・社内規程に基づく措置を受けることに同意する。
-                </li>
-              </ol>
-              <p className="text-gray-500">
-                ログインすることにより、上記の機密保持義務および適切な取り扱いに関する契約に同意したものとみなします。
+            <div className="mb-4 max-h-64 overflow-y-auto text-xs text-gray-600 leading-relaxed bg-white rounded border border-gray-200 p-3 space-y-3">
+              <p className="font-bold text-gray-800 text-sm">HRM システム 利用規約</p>
+              <p className="text-gray-500">制定日：2025年4月1日　最終改定：2026年4月1日</p>
+
+              <div>
+                <p className="font-semibold text-gray-700 mb-1">第1条（目的・適用範囲）</p>
+                <p>
+                  本利用規約（以下「本規約」）は、<strong>{COMPANY_NAME}</strong>（以下「当社」）が提供する
+                  人事管理システム「HRM」（以下「本システム」）の利用に際して、
+                  すべての利用者が遵守すべき事項を定めるものです。
+                  本システムへのログインをもって、本規約に同意したものとみなします。
+                </p>
+              </div>
+
+              <div>
+                <p className="font-semibold text-gray-700 mb-1">第2条（取り扱う情報）</p>
+                <p>本システムは以下の情報を管理します。これらの情報は厳格に保護されます。</p>
+                <ul className="list-disc list-inside pl-2 mt-1 space-y-0.5">
+                  <li>社員の氏名・住所・連絡先等の個人識別情報</li>
+                  <li>給与・賞与・控除に関する給与情報</li>
+                  <li>勤怠・休暇・残業に関する勤務情報</li>
+                  <li>目標管理（MBO）・評価に関する人事情報</li>
+                  <li>経費・稟議・資産に関する業務情報</li>
+                  <li>採用候補者に関する採用情報</li>
+                </ul>
+              </div>
+
+              <div>
+                <p className="font-semibold text-gray-700 mb-1">第3条（機密保持義務）</p>
+                <ol className="list-decimal list-inside pl-2 space-y-1">
+                  <li>本システムを通じて知り得た一切の情報は、業務遂行に必要な範囲に限り使用すること。</li>
+                  <li>業務上知り得た情報を、当社の事前の書面による承諾なく、第三者に開示・提供・漏洩しないこと。</li>
+                  <li>取得した情報の無断複製・スクリーンショット・外部送信を行わないこと。</li>
+                  <li>退職・契約終了後も、在職中に知り得た情報の機密保持義務は継続するものとする。</li>
+                </ol>
+              </div>
+
+              <div>
+                <p className="font-semibold text-gray-700 mb-1">第4条（アカウント管理）</p>
+                <ol className="list-decimal list-inside pl-2 space-y-1">
+                  <li>ログイン情報（メールアドレス・パスワード）は自己の責任において厳重に管理すること。</li>
+                  <li>アカウントの第三者への譲渡・貸与・共有を禁止する。</li>
+                  <li>不正アクセスや情報漏洩の疑いが生じた場合は、直ちにシステム管理者へ報告すること。</li>
+                  <li>退職・異動・役割変更の際は、速やかに管理者へアカウント処理を依頼すること。</li>
+                </ol>
+              </div>
+
+              <div>
+                <p className="font-semibold text-gray-700 mb-1">第5条（セキュリティ・禁止事項）</p>
+                <ol className="list-decimal list-inside pl-2 space-y-1">
+                  <li>当社の情報セキュリティポリシーおよび個人情報保護法・不正競争防止法等の関係法令を遵守すること。</li>
+                  <li>本システムへの不正アクセス・改ざん・クラッキング行為を行わないこと。</li>
+                  <li>マルウェア・ウイルス等の有害なプログラムを持ち込まないこと。</li>
+                  <li>業務目的外での本システムの利用を行わないこと。</li>
+                </ol>
+              </div>
+
+              <div>
+                <p className="font-semibold text-gray-700 mb-1">第6条（AI機能の利用）</p>
+                <p>
+                  本システムはAI機能（文章生成・画像解析等）を提供する場合があります。
+                  AI機能の利用にあたっては、社員個人情報・機密情報を外部AIサービスに送信しないよう
+                  十分に注意し、当社のAI利用ガイドラインに従うこと。
+                </p>
+              </div>
+
+              <div>
+                <p className="font-semibold text-gray-700 mb-1">第7条（違反時の措置）</p>
+                <p>
+                  本規約に違反した場合、当社は就業規則・社内規程・関係法令に基づき、
+                  アカウント停止・懲戒処分・損害賠償請求・刑事告訴等の措置を講じる場合があります。
+                </p>
+              </div>
+
+              <p className="text-gray-400 text-xs pt-1 border-t">
+                以上の内容を十分に理解の上、同意チェックボックスにチェックを入れてログインしてください。
               </p>
             </div>
           )}
@@ -184,8 +230,8 @@ export default function LoginForm() {
               className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
             />
             <span className="text-sm text-gray-700 leading-snug">
-              利用規約を読み、{COMPANY_NAME}の業務情報の機密保持義務および
-              適切な取り扱い契約に<strong>同意します</strong>
+              上記の利用規約を読み、{COMPANY_NAME} HRMシステムの利用規約・
+              機密保持義務・個人情報の適切な取り扱いに<strong>同意します</strong>
             </span>
           </label>
 

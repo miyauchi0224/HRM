@@ -39,6 +39,23 @@ def me_view(request):
     return Response(data)
 
 
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def api_key_view(request):
+    """GET/POST /api/v1/auth/api-key/ - Anthropic APIキーの取得・保存"""
+    if request.method == 'GET':
+        key = request.user.anthropic_api_key or ''
+        masked = f'sk-ant-...{key[-6:]}' if len(key) > 10 else ('登録済' if key else '未登録')
+        return Response({'has_key': bool(key), 'masked': masked})
+    key = request.data.get('api_key', '').strip()
+    if key and not key.startswith('sk-ant-'):
+        return Response({'error': 'Anthropic APIキーは sk-ant- で始まる必要があります'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    request.user.anthropic_api_key = key
+    request.user.save(update_fields=['anthropic_api_key'])
+    return Response({'message': 'APIキーを保存しました', 'has_key': bool(key)})
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def change_password_view(request):

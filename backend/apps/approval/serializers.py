@@ -11,10 +11,12 @@ class ApprovalTemplateSerializer(serializers.ModelSerializer):
 
 class ApprovalStepSerializer(serializers.ModelSerializer):
     approver_name = serializers.CharField(source='approver.full_name', read_only=True)
+    step_role_label = serializers.CharField(source='get_step_role_display', read_only=True)
 
     class Meta:
         model = ApprovalStep
-        fields = ['id', 'approver', 'approver_name', 'order', 'decision', 'comment', 'decided_at']
+        fields = ['id', 'approver', 'approver_name', 'step_role', 'step_role_label',
+                  'order', 'decision', 'comment', 'decided_at']
 
 
 class ApprovalRequestSerializer(serializers.ModelSerializer):

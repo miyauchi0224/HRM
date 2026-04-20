@@ -6,9 +6,16 @@ from rest_framework import status
 from apps.accounts.permissions import IsNotCustomer
 
 
-def get_client():
-    """Anthropic クライアントを取得（API キーが設定されていない場合は None）"""
-    api_key = getattr(settings, 'ANTHROPIC_API_KEY', '') or ''
+def get_client(user=None):
+    """
+    Anthropic クライアントを取得。
+    優先順位: ユーザー個別キー → サーバー共通キー → None
+    """
+    api_key = ''
+    if user and hasattr(user, 'anthropic_api_key') and user.anthropic_api_key:
+        api_key = user.anthropic_api_key
+    if not api_key:
+        api_key = getattr(settings, 'ANTHROPIC_API_KEY', '') or ''
     if not api_key:
         return None
     return anthropic.Anthropic(api_key=api_key)
@@ -23,7 +30,7 @@ class DraftDailyReportView(APIView):
         if not bullet_points:
             return Response({'error': '箇条書きを入力してください'}, status=status.HTTP_400_BAD_REQUEST)
 
-        client = get_client()
+        client = get_client(request.user)
         if not client:
             return Response({'error': 'AI機能が設定されていません（APIキーが未設定）'},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -59,7 +66,7 @@ class DraftMBOReportView(APIView):
         if not goal:
             return Response({'error': '目標を入力してください'}, status=status.HTTP_400_BAD_REQUEST)
 
-        client = get_client()
+        client = get_client(request.user)
         if not client:
             return Response({'error': 'AI機能が設定されていません（APIキーが未設定）'},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -94,7 +101,7 @@ class AnalyzeExpenseReceiptView(APIView):
         if not image_base64:
             return Response({'error': '画像データを送信してください'}, status=status.HTTP_400_BAD_REQUEST)
 
-        client = get_client()
+        client = get_client(request.user)
         if not client:
             return Response({'error': 'AI機能が設定されていません（APIキーが未設定）'},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
