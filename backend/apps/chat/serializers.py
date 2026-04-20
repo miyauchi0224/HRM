@@ -4,13 +4,21 @@ from apps.accounts.models import User
 
 
 class UserMinSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = ['id', 'full_name', 'email']
 
+    def get_full_name(self, obj):
+        try:
+            return obj.employee.full_name
+        except Exception:
+            return obj.email
+
 
 class ChatMessageSerializer(serializers.ModelSerializer):
-    sender_name = serializers.CharField(source='sender.full_name', read_only=True)
+    sender_name = serializers.SerializerMethodField()
     is_read = serializers.SerializerMethodField()
 
     class Meta:
@@ -18,6 +26,14 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         fields = ['id', 'room', 'sender', 'sender_name', 'content',
                   'attachment_url', 'attachment_name', 'is_deleted', 'created_at', 'is_read']
         read_only_fields = ['sender', 'is_deleted']
+
+    def get_sender_name(self, obj):
+        if not obj.sender:
+            return ''
+        try:
+            return obj.sender.employee.full_name
+        except Exception:
+            return obj.sender.email
 
     def get_is_read(self, obj):
         request = self.context.get('request')
@@ -41,8 +57,13 @@ class ChatRoomSerializer(serializers.ModelSerializer):
     def get_last_message(self, obj):
         msg = obj.messages.filter(is_deleted=False).last()
         if msg:
-            return {'content': msg.content, 'sender': msg.sender.full_name if msg.sender else '',
-                    'created_at': msg.created_at}
+            sender_name = ''
+            if msg.sender:
+                try:
+                    sender_name = msg.sender.employee.full_name
+                except Exception:
+                    sender_name = msg.sender.email
+            return {'content': msg.content, 'sender': sender_name, 'created_at': msg.created_at}
         return None
 
     def get_unread_count(self, obj):
@@ -54,7 +75,6 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         ).exclude(sender=request.user).count()
 
     def create(self, validated_data):
-        member_ids = validated_data.pop('member_ids', [])
-        room = super().create(validated_data)
-        room.members.set(member_ids + [validated_data.get('created_by').id if validated_data.get('created_by') else []])
-        return room
+        # member_ids はビュー側で処理するためここでは除去するだけ
+        validated_data.pop('member_ids', [])
+        return super().create(validated_data)

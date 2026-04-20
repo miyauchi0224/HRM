@@ -18,9 +18,13 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         room = serializer.save(created_by=self.request.user)
+        # 作成者を必ずメンバーに追加
+        room.members.add(self.request.user)
+        # 指定されたメンバーを追加
         member_ids = self.request.data.get('member_ids', [])
-        users = User.objects.filter(id__in=member_ids)
-        room.members.add(self.request.user, *users)
+        if member_ids:
+            users = User.objects.filter(id__in=member_ids)
+            room.members.add(*users)
 
     @action(detail=False, methods=['post'], url_path='direct')
     def get_or_create_direct(self, request):
