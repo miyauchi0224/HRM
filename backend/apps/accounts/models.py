@@ -30,14 +30,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         CUSTOMER   = 'customer',   '顧客'
         ADMIN      = 'admin',      'システム管理者'
 
-    id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    email        = models.EmailField(unique=True)
-    cognito_sub  = models.CharField(max_length=255, unique=True, blank=True, null=True)
-    role         = models.CharField(max_length=20, choices=Role.choices, default=Role.EMPLOYEE)
-    is_active    = models.BooleanField(default=True)
-    is_staff     = models.BooleanField(default=False)
-    created_at   = models.DateTimeField(auto_now_add=True)
-    updated_at   = models.DateTimeField(auto_now=True)
+    id                 = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email              = models.EmailField(unique=True)
+    cognito_sub        = models.CharField(max_length=255, unique=True, blank=True, null=True)
+    role               = models.CharField(max_length=20, choices=Role.choices, default=Role.EMPLOYEE)
+    anthropic_api_key  = models.CharField(max_length=200, blank=True, verbose_name='Anthropic APIキー')
+    is_active          = models.BooleanField(default=True)
+    is_staff           = models.BooleanField(default=False)
+    created_at         = models.DateTimeField(auto_now_add=True)
+    updated_at         = models.DateTimeField(auto_now=True)
 
     objects = UserManager()
 

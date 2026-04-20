@@ -6,7 +6,7 @@
 import dynamic from 'next/dynamic'
 
 const LoginForm = dynamic(() => import('./LoginForm'), {
-  ssr: false,
+  ssr: true,
   loading: () => (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">

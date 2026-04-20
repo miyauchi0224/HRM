@@ -154,7 +154,8 @@ export default function Sidebar() {
       </nav>
 
       {/* ログアウト */}
-      <div className="p-2 border-t border-gray-700">
+      <div className="p-2 border-t border-gray-700 space-y-0.5">
+        <NavLink href="/settings" label="設定" icon={Settings} active={pathname === '/settings'} />
         <button
           onClick={logout}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-colors text-sm"

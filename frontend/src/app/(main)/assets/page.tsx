@@ -1,9 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { Package, Plus, ArrowRightLeft } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, Upload, Download, Trash2 } from 'lucide-react'
 
 interface Asset {
   id: string; asset_number: string; name: string; category_name: string | null
@@ -26,6 +26,9 @@ export default function AssetsPage() {
   const [showNew, setShowNew] = useState(false)
   const [assignTarget, setAssignTarget] = useState<Asset | null>(null)
   const [empId, setEmpId] = useState('')
+  const [csvResult, setCsvResult] = useState<any>(null)
+  const importRef = useRef<HTMLInputElement>(null)
+  const deleteRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState({
     asset_number: '', name: '', serial_number: '', model: '',
     manufacturer: '', location: '', purchase_price: '', note: ''
@@ -57,6 +60,46 @@ export default function AssetsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
   })
 
+  const downloadTemplate = async () => {
+    const res = await api.get('/api/v1/assets/items/template-csv/', { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'asset_template.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImportCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res = await api.post('/api/v1/assets/items/import-csv/', fd)
+      setCsvResult({ type: 'import', ...res.data })
+    } catch (err: any) {
+      setCsvResult({ type: 'import', error: err.response?.data?.error ?? 'エラー' })
+    }
+    e.target.value = ''
+    qc.invalidateQueries({ queryKey: ['assets'] })
+  }
+
+  const handleDeleteCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res = await api.post('/api/v1/assets/items/delete-csv/', fd)
+      setCsvResult({ type: 'delete', ...res.data })
+    } catch (err: any) {
+      setCsvResult({ type: 'delete', error: err.response?.data?.error ?? 'エラー' })
+    }
+    e.target.value = ''
+    qc.invalidateQueries({ queryKey: ['assets'] })
+  }
+
   const totalValue = assets.reduce((s, a) => s + (a.purchase_price ?? 0), 0)
 
   return (
@@ -70,12 +113,25 @@ export default function AssetsPage() {
           </div>
         </div>
         {user?.role && ['hr', 'admin'].includes(user.role) && (
-          <button
-            onClick={() => setShowNew(true)}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 text-sm"
-          >
-            <Plus size={16} /> 資産登録
-          </button>
+          <div className="flex gap-2">
+            <button onClick={downloadTemplate} className="flex items-center gap-1 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm">
+              <Download size={14} /> テンプレート
+            </button>
+            <button onClick={() => importRef.current?.click()} className="flex items-center gap-1 border border-indigo-300 text-indigo-700 px-3 py-2 rounded-lg hover:bg-indigo-50 text-sm">
+              <Upload size={14} /> CSV一括登録
+            </button>
+            <button onClick={() => deleteRef.current?.click()} className="flex items-center gap-1 border border-red-300 text-red-600 px-3 py-2 rounded-lg hover:bg-red-50 text-sm">
+              <Trash2 size={14} /> CSV一括削除
+            </button>
+            <button
+              onClick={() => setShowNew(true)}
+              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 text-sm"
+            >
+              <Plus size={16} /> 資産登録
+            </button>
+            <input ref={importRef} type="file" accept=".csv" className="hidden" onChange={handleImportCsv} />
+            <input ref={deleteRef} type="file" accept=".csv" className="hidden" onChange={handleDeleteCsv} />
+          </div>
         )}
       </div>
 
@@ -92,6 +148,20 @@ export default function AssetsPage() {
           </div>
         ))}
       </div>
+
+      {/* CSV結果 */}
+      {csvResult && (
+        <div className={`rounded-lg border p-3 mb-4 text-sm ${csvResult.error ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'}`}>
+          {csvResult.error ? (
+            <p>エラー: {csvResult.error}</p>
+          ) : csvResult.type === 'import' ? (
+            <p>CSV一括登録完了 — 新規: {csvResult.created}件 / 更新: {csvResult.updated}件 {csvResult.errors?.length > 0 ? `/ エラー: ${csvResult.errors.length}件` : ''}</p>
+          ) : (
+            <p>CSV一括削除完了 — 削除: {csvResult.deleted}件 {csvResult.not_found?.length > 0 ? `/ 未発見: ${csvResult.not_found.join(', ')}` : ''}</p>
+          )}
+          <button onClick={() => setCsvResult(null)} className="mt-1 text-xs underline">閉じる</button>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
         {isLoading ? (

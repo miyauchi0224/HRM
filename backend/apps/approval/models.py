@@ -71,11 +71,19 @@ class ApprovalStep(models.Model):
         REJECTED = 'rejected', '却下'
         SKIPPED = 'skipped', 'スキップ'
 
+    class StepRole(models.TextChoices):
+        SUPERVISOR = 'supervisor', '上司'
+        MANAGER = 'manager', '部門長'
+        ACCOUNTING = 'accounting', '財務'
+        CUSTOM = 'custom', 'カスタム'
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     request = models.ForeignKey(ApprovalRequest, on_delete=models.CASCADE,
                                 related_name='steps')
     approver = models.ForeignKey(Employee, on_delete=models.CASCADE,
                                  related_name='approval_steps', verbose_name='承認者')
+    step_role = models.CharField(max_length=20, choices=StepRole.choices,
+                                 default=StepRole.CUSTOM, verbose_name='承認者の役割')
     order = models.PositiveSmallIntegerField(verbose_name='承認順序')
     decision = models.CharField(max_length=20, choices=Decision.choices,
                                 default=Decision.PENDING)

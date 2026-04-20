@@ -3,7 +3,19 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { FileText, Plus, ChevronRight, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { FileText, Plus, CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-react'
+
+interface ApprovalStep {
+  id: string
+  approver: string
+  approver_name: string
+  step_role: string
+  step_role_label: string
+  order: number
+  decision: string
+  comment: string
+  decided_at: string | null
+}
 
 interface ApprovalRequest {
   id: string
@@ -15,7 +27,14 @@ interface ApprovalRequest {
   applicant_name: string
   submitted_at: string | null
   created_at: string
-  steps: Array<{ id: string; approver_name: string; order: number; decision: string; comment: string }>
+  steps: ApprovalStep[]
+}
+
+interface DefaultStep {
+  employee_id: string
+  name: string
+  step_role: string
+  order: number
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -29,6 +48,14 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   rejected: { label: '却下', color: 'bg-red-100 text-red-600' },
   withdrawn: { label: '取り下げ', color: 'bg-gray-100 text-gray-500' },
 }
+const STEP_ROLE_ICON: Record<string, string> = {
+  supervisor: '上司', manager: '部門長', accounting: '財務', custom: 'カスタム'
+}
+const DECISION_CONFIG: Record<string, { icon: typeof CheckCircle; color: string }> = {
+  approved: { icon: CheckCircle, color: 'text-green-500' },
+  rejected: { icon: XCircle, color: 'text-red-500' },
+  pending: { icon: Clock, color: 'text-gray-400' },
+}
 
 export default function ApprovalPage() {
   const user = useAuthStore((s) => s.user)
@@ -36,15 +63,21 @@ export default function ApprovalPage() {
   const [showNew, setShowNew] = useState(false)
   const [selected, setSelected] = useState<ApprovalRequest | null>(null)
   const [form, setForm] = useState({ title: '', category: 'purchase', amount: '', content: '' })
+  const [defaultSteps, setDefaultSteps] = useState<DefaultStep[]>([])
 
   const { data: requests = [], isLoading } = useQuery<ApprovalRequest[]>({
     queryKey: ['approval-requests'],
     queryFn: () => api.get('/api/v1/approval/requests/').then((r) => r.data.results ?? r.data),
   })
 
+  const buildStepsMut = useMutation({
+    mutationFn: () => api.post('/api/v1/approval/requests/build-default-steps/'),
+    onSuccess: (res) => setDefaultSteps(res.data.steps ?? []),
+  })
+
   const createMut = useMutation({
     mutationFn: (data: any) => api.post('/api/v1/approval/requests/', data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['approval-requests'] }); setShowNew(false) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['approval-requests'] }); setShowNew(false); setDefaultSteps([]) },
   })
 
   const submitMut = useMutation({
@@ -65,6 +98,11 @@ export default function ApprovalPage() {
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length
 
+  const openNew = () => {
+    setShowNew(true)
+    buildStepsMut.mutate()
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -72,14 +110,14 @@ export default function ApprovalPage() {
           <FileText className="text-indigo-600" size={28} />
           <div>
             <h1 className="text-2xl font-bold text-gray-800">電子稟議</h1>
-            <p className="text-sm text-gray-500">購買・出張・契約などの承認申請</p>
+            <p className="text-sm text-gray-500">起案者 → 上司 → 部門長 → 財務 の承認フロー</p>
           </div>
         </div>
         <button
-          onClick={() => setShowNew(true)}
+          onClick={openNew}
           className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
         >
-          <Plus size={18} /> 新規申請
+          <Plus size={18} /> 新規起案
         </button>
       </div>
 
@@ -104,68 +142,81 @@ export default function ApprovalPage() {
         ) : requests.length === 0 ? (
           <div className="p-8 text-center text-gray-400">申請がありません</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-              <tr>
-                <th className="px-4 py-3 text-left">件名</th>
-                <th className="px-4 py-3 text-left">カテゴリ</th>
-                <th className="px-4 py-3 text-left">申請者</th>
-                <th className="px-4 py-3 text-right">金額</th>
-                <th className="px-4 py-3 text-center">ステータス</th>
-                <th className="px-4 py-3 text-center">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {requests.map((req) => {
-                const cfg = STATUS_CONFIG[req.status] ?? { label: req.status, color: 'bg-gray-100 text-gray-600' }
-                return (
-                  <tr key={req.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-800">{req.title}</td>
-                    <td className="px-4 py-3 text-gray-600">{CATEGORY_LABELS[req.category] ?? req.category}</td>
-                    <td className="px-4 py-3 text-gray-600">{req.applicant_name}</td>
-                    <td className="px-4 py-3 text-right text-gray-800">
-                      {req.amount != null ? `¥${req.amount.toLocaleString()}` : '-'}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${cfg.color}`}>
-                        {cfg.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        {req.status === 'draft' && (
-                          <button
-                            onClick={() => submitMut.mutate(req.id)}
-                            className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200"
-                          >申請</button>
-                        )}
-                        {req.status === 'pending' && (
-                          <button
-                            onClick={() => setSelected(req)}
-                            className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
-                          >承認/却下</button>
-                        )}
-                        {['draft', 'pending'].includes(req.status) && req.applicant_name === user?.full_name && (
-                          <button
-                            onClick={() => withdrawMut.mutate(req.id)}
-                            className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-gray-200"
-                          >取り下げ</button>
+          <div className="divide-y">
+            {requests.map((req) => {
+              const cfg = STATUS_CONFIG[req.status] ?? { label: req.status, color: 'bg-gray-100 text-gray-600' }
+              return (
+                <div key={req.id} className="p-4 hover:bg-gray-50">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-1">
+                        <span className="font-semibold text-gray-800">{req.title}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
+                        <span className="text-xs text-gray-500">{CATEGORY_LABELS[req.category]}</span>
+                        {req.amount != null && (
+                          <span className="text-xs font-medium text-gray-700">¥{req.amount.toLocaleString()}</span>
                         )}
                       </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                      <p className="text-sm text-gray-500 mb-2">起案者: {req.applicant_name}</p>
+
+                      {/* 承認フロー表示 */}
+                      {req.steps.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className="text-xs text-gray-400 mr-1">承認ルート:</span>
+                          {req.steps.map((step, i) => {
+                            const dcfg = DECISION_CONFIG[step.decision] ?? DECISION_CONFIG.pending
+                            const Icon = dcfg.icon
+                            return (
+                              <div key={step.id} className="flex items-center gap-1">
+                                {i > 0 && <ChevronRight size={12} className="text-gray-300" />}
+                                <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
+                                  step.decision === 'approved' ? 'bg-green-50 border-green-200 text-green-700' :
+                                  step.decision === 'rejected' ? 'bg-red-50 border-red-200 text-red-600' :
+                                  'bg-gray-50 border-gray-200 text-gray-500'
+                                }`}>
+                                  <Icon size={11} className={dcfg.color} />
+                                  <span>{STEP_ROLE_ICON[step.step_role]}</span>
+                                  <span className="font-medium">{step.approver_name}</span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {req.status === 'draft' && (
+                        <button
+                          onClick={() => submitMut.mutate(req.id)}
+                          className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-200"
+                        >申請</button>
+                      )}
+                      {req.status === 'pending' && (
+                        <button
+                          onClick={() => setSelected(req)}
+                          className="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200"
+                        >承認/却下</button>
+                      )}
+                      {['draft', 'pending'].includes(req.status) && req.applicant_name === user?.full_name && (
+                        <button
+                          onClick={() => withdrawMut.mutate(req.id)}
+                          className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200"
+                        >取り下げ</button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
 
-      {/* 新規申請モーダル */}
+      {/* 新規起案モーダル */}
       {showNew && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
-            <h2 className="text-lg font-bold text-gray-800 mb-4">新規稟議申請</h2>
+            <h2 className="text-lg font-bold text-gray-800 mb-4">新規稟議起案</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">件名 *</label>
@@ -209,10 +260,33 @@ export default function ApprovalPage() {
                   placeholder="申請の目的・理由・詳細を記載してください"
                 />
               </div>
+
+              {/* 自動生成された承認ルート */}
+              {defaultSteps.length > 0 && (
+                <div className="bg-indigo-50 rounded-lg p-3">
+                  <p className="text-xs font-medium text-indigo-700 mb-2">承認ルート（自動設定）</p>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-xs bg-white border border-indigo-200 text-indigo-700 px-2 py-1 rounded-full">
+                      {user?.full_name}（起案者）
+                    </span>
+                    {defaultSteps.map((step) => (
+                      <div key={step.employee_id} className="flex items-center gap-1">
+                        <ChevronRight size={14} className="text-indigo-300" />
+                        <span className="text-xs bg-white border border-indigo-200 text-indigo-700 px-2 py-1 rounded-full">
+                          {STEP_ROLE_ICON[step.step_role]}: {step.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {buildStepsMut.isPending && (
+                <p className="text-xs text-gray-400">承認者を自動取得中...</p>
+              )}
             </div>
             <div className="flex gap-3 mt-6">
               <button
-                onClick={() => setShowNew(false)}
+                onClick={() => { setShowNew(false); setDefaultSteps([]) }}
                 className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50"
               >キャンセル</button>
               <button
@@ -221,6 +295,7 @@ export default function ApprovalPage() {
                   category: form.category,
                   amount: form.amount || null,
                   content: form.content,
+                  approver_ids: defaultSteps.map((s) => s.employee_id),
                 })}
                 disabled={!form.title || !form.content}
                 className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50"
@@ -248,12 +323,47 @@ function DecideModal({ req, onClose, onDecide }: {
   onDecide: (decision: string, comment: string) => void
 }) {
   const [comment, setComment] = useState('')
+
+  const currentStep = req.steps.find((s) => s.decision === 'pending')
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         <h2 className="text-lg font-bold text-gray-800 mb-1">{req.title}</h2>
         <p className="text-sm text-gray-500 mb-4">申請者: {req.applicant_name}</p>
         <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 mb-4">{req.content}</p>
+
+        {/* 承認フロー全体表示 */}
+        <div className="mb-4">
+          <p className="text-xs font-medium text-gray-500 mb-2">承認ルート</p>
+          <div className="flex items-center gap-1 flex-wrap">
+            {req.steps.map((step, i) => {
+              const dcfg = DECISION_CONFIG[step.decision] ?? DECISION_CONFIG.pending
+              const Icon = dcfg.icon
+              const isCurrent = step.id === currentStep?.id
+              return (
+                <div key={step.id} className="flex items-center gap-1">
+                  {i > 0 && <ChevronRight size={12} className="text-gray-300" />}
+                  <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border ${
+                    isCurrent ? 'bg-yellow-50 border-yellow-300 text-yellow-700 font-bold' :
+                    step.decision === 'approved' ? 'bg-green-50 border-green-200 text-green-700' :
+                    'bg-gray-50 border-gray-200 text-gray-400'
+                  }`}>
+                    <Icon size={11} className={dcfg.color} />
+                    <span>{STEP_ROLE_ICON[step.step_role]}: {step.approver_name}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {currentStep && (
+          <p className="text-xs text-yellow-700 bg-yellow-50 rounded px-3 py-2 mb-4">
+            あなたの承認番が来ています（{STEP_ROLE_ICON[currentStep.step_role]}）
+          </p>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">コメント</label>
           <textarea

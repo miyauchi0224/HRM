@@ -30,6 +30,59 @@ class ApprovalRequestViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(applicant=self.request.user.employee)
 
+    @action(detail=False, methods=['post'], url_path='build-default-steps')
+    def build_default_steps(self, request):
+        """
+        申請者の組織階層から承認ルートを自動構築して返す。
+        フロー: 上司(supervisor) → 部門長(manager) → 財務(accounting)
+        """
+        try:
+            employee = request.user.employee
+        except Exception:
+            return Response({'error': '社員情報が見つかりません'}, status=status.HTTP_403_FORBIDDEN)
+
+        steps = []
+        # 1. 上司（直属マネージャーの中で最初の supervisor/manager）
+        for mgr in employee.managers.select_related('user').all():
+            if mgr.user.role in ('supervisor', 'manager', 'hr', 'accounting', 'admin'):
+                steps.append({
+                    'employee_id': str(mgr.id),
+                    'name': mgr.full_name,
+                    'step_role': 'supervisor',
+                    'order': 1,
+                })
+                break
+
+        # 2. 部門長（上司の上司、または manager ロール）
+        from apps.employees.models import Employee as EmployeeModel
+        managers_of_managers = EmployeeModel.objects.filter(
+            subordinates__in=employee.managers.all(),
+            user__role__in=('manager', 'hr', 'admin'),
+        ).distinct()
+        for mgr in managers_of_managers:
+            if not any(s['employee_id'] == str(mgr.id) for s in steps):
+                steps.append({
+                    'employee_id': str(mgr.id),
+                    'name': mgr.full_name,
+                    'step_role': 'manager',
+                    'order': 2,
+                })
+                break
+
+        # 3. 財務（accounting または hr ロールを持つ社員）
+        accounting_emp = EmployeeModel.objects.filter(
+            user__role__in=('accounting', 'hr')
+        ).first()
+        if accounting_emp and not any(s['employee_id'] == str(accounting_emp.id) for s in steps):
+            steps.append({
+                'employee_id': str(accounting_emp.id),
+                'name': accounting_emp.full_name,
+                'step_role': 'accounting',
+                'order': 3,
+            })
+
+        return Response({'steps': steps})
+
     @action(detail=True, methods=['post'], url_path='submit')
     def submit(self, request, pk=None):
         """下書きを申請中に変更"""
