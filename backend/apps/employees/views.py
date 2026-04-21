@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from apps.accounts.permissions import IsNotCustomer, IsHR
 from .models import Employee, EmergencyContact
@@ -19,6 +20,7 @@ from .serializers import (
 )
 from apps.accounts.models import User
 from apps.common.mixins import SoftDeleteViewSetMixin
+from apps.common.models import AuditLog
 
 
 class IsHROrAdmin(IsHR):
@@ -49,6 +51,46 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         if self.action in ('create', 'destroy'):
             return [IsHROrAdmin()]
         return [IsAuthenticated()]
+
+    def destroy(self, request, *args, **kwargs):
+        """社員削除 → 本人の全関連データをカスケードソフトデリートして非表示化"""
+        instance = self.get_object()
+        user = request.user
+        now = timezone.now()
+
+        # 社員に紐づく全SoftDeleteModelレコードを非表示化
+        _RELATED_NAMES = [
+            'emergency_contacts', 'family_members',
+            'todos', 'todo_daily_reports',
+            'expense_requests',
+            'attendance_records', 'mod_requests_sent',
+            'received_evaluations', 'given_evaluations',
+            'mbo_goals', 'daily_reports',
+            'allowances', 'payslips',
+            'skills',
+            'enrollments', 'quiz_attempts',
+            'leave_balances', 'leave_requests',
+            'approval_requests', 'approval_steps',
+            'intra_comments',
+        ]
+        for name in _RELATED_NAMES:
+            mgr = getattr(instance, name, None)
+            if mgr is not None:
+                try:
+                    mgr.filter(is_deleted=False).update(
+                        is_deleted=True, deleted_at=now, deleted_by=user
+                    )
+                except Exception:
+                    pass
+
+        instance.soft_delete(user=user)
+        AuditLog.log(
+            user=user,
+            action=AuditLog.Action.DELETE,
+            instance=instance,
+            request=request,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def create(self, request, *args, **kwargs):
         """社員＋Userアカウントを同時作成（管理者・人事のみ）"""

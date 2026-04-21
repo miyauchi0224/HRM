@@ -581,3 +581,11 @@ docker compose exec backend python manage.py migrate
 
 docker compose exec backend python manage.py makemaigrations
 
+#
+資産管理のCSV一括削除は不要。
+
+社員削除後は、当該社員の情報やアップロードしたデータは全て非表示となる。
+
+
+
+
