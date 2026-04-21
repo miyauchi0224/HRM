@@ -142,32 +142,6 @@ class AssetViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
 
         return Response({'created': created, 'updated': updated, 'errors': errors})
 
-    @action(detail=False, methods=['post'], url_path='delete-csv',
-            parser_classes=[MultiPartParser, FormParser], permission_classes=[IsHR])
-    def delete_csv(self, request):
-        """POST /api/v1/assets/items/delete-csv/ — CSV一括削除（資産番号指定）"""
-        file = request.FILES.get('file')
-        if not file:
-            return Response({'error': 'ファイルが必要です'}, status=status.HTTP_400_BAD_REQUEST)
-
-        decoded = file.read().decode('utf-8-sig')
-        reader = csv.DictReader(io.StringIO(decoded))
-        deleted = 0
-        not_found = []
-
-        for row in reader:
-            asset_number = row.get('資産番号', '').strip()
-            if not asset_number:
-                continue
-            qs = Asset.objects.filter(asset_number=asset_number)
-            if qs.exists():
-                qs.delete()
-                deleted += 1
-            else:
-                not_found.append(asset_number)
-
-        return Response({'deleted': deleted, 'not_found': not_found})
-
     @action(detail=True, methods=['post'], url_path='return')
     def return_asset(self, request, pk=None):
         """資産を返却"""
