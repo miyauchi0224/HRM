@@ -34,7 +34,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     email              = models.EmailField(unique=True)
     cognito_sub        = models.CharField(max_length=255, unique=True, blank=True, null=True)
     role               = models.CharField(max_length=20, choices=Role.choices, default=Role.EMPLOYEE)
+    class AIProvider(models.TextChoices):
+        ANTHROPIC = 'anthropic', 'Anthropic (Claude)'
+        OPENAI    = 'openai',    'OpenAI (ChatGPT)'
+
     anthropic_api_key  = models.CharField(max_length=200, blank=True, verbose_name='Anthropic APIキー')
+    openai_api_key     = models.CharField(max_length=200, blank=True, verbose_name='OpenAI APIキー')
+    ai_provider        = models.CharField(
+        max_length=20, choices=AIProvider.choices, default=AIProvider.ANTHROPIC,
+        verbose_name='使用するAIプロバイダー',
+    )
     is_active          = models.BooleanField(default=True)
     is_staff           = models.BooleanField(default=False)
     created_at         = models.DateTimeField(auto_now_add=True)

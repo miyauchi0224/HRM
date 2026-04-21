@@ -39,21 +39,58 @@ def me_view(request):
     return Response(data)
 
 
+def _mask_key(key: str, prefix: str) -> str:
+    if len(key) > 10:
+        return f'{prefix}...{key[-6:]}'
+    return '登録済' if key else ''
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def api_key_view(request):
-    """GET/POST /api/v1/auth/api-key/ - Anthropic APIキーの取得・保存"""
+    """
+    GET  /api/v1/auth/api-key/
+      → { provider, anthropic_has_key, anthropic_masked, openai_has_key, openai_masked }
+    POST /api/v1/auth/api-key/
+      body: { provider, api_key }
+    """
+    user = request.user
+
     if request.method == 'GET':
-        key = request.user.anthropic_api_key or ''
-        masked = f'sk-ant-...{key[-6:]}' if len(key) > 10 else ('登録済' if key else '未登録')
-        return Response({'has_key': bool(key), 'masked': masked})
-    key = request.data.get('api_key', '').strip()
-    if key and not key.startswith('sk-ant-'):
-        return Response({'error': 'Anthropic APIキーは sk-ant- で始まる必要があります'},
+        ant_key = user.anthropic_api_key or ''
+        oai_key = user.openai_api_key or ''
+        return Response({
+            'provider':          user.ai_provider,
+            'anthropic_has_key': bool(ant_key),
+            'anthropic_masked':  _mask_key(ant_key, 'sk-ant-'),
+            'openai_has_key':    bool(oai_key),
+            'openai_masked':     _mask_key(oai_key, 'sk-'),
+        })
+
+    provider = request.data.get('provider', '').strip()
+    api_key  = request.data.get('api_key', '').strip()
+
+    if provider not in ('anthropic', 'openai'):
+        return Response({'error': 'provider は anthropic または openai を指定してください'},
                         status=status.HTTP_400_BAD_REQUEST)
-    request.user.anthropic_api_key = key
-    request.user.save(update_fields=['anthropic_api_key'])
-    return Response({'message': 'APIキーを保存しました', 'has_key': bool(key)})
+
+    # プレフィックスバリデーション（登録・削除どちらも空文字は許可）
+    if api_key:
+        if provider == 'anthropic' and not api_key.startswith('sk-ant-'):
+            return Response({'error': 'Anthropic APIキーは sk-ant- で始まる必要があります'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if provider == 'openai' and not api_key.startswith('sk-'):
+            return Response({'error': 'OpenAI APIキーは sk- で始まる必要があります'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+    if provider == 'anthropic':
+        user.anthropic_api_key = api_key
+    else:
+        user.openai_api_key = api_key
+
+    user.ai_provider = provider
+    user.save(update_fields=['anthropic_api_key', 'openai_api_key', 'ai_provider'])
+    return Response({'message': 'APIキーを保存しました', 'provider': provider})
 
 
 @api_view(['POST'])
