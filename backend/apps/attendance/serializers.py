@@ -33,11 +33,12 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model  = AttendanceRecord
         fields = [
-            'id', 'date', 'clock_in', 'clock_out', 'break_minutes',
-            'status', 'note', 'project_records',
+            'id', 'date', 'clock_in', 'clock_out',
+            'stamped_clock_in', 'stamped_clock_out',
+            'break_minutes', 'status', 'note', 'project_records',
             'work_minutes', 'overtime_minutes',
         ]
-        read_only_fields = ['id', 'status']
+        read_only_fields = ['id', 'status', 'stamped_clock_in', 'stamped_clock_out']
 
     def validate(self, data):
         project_records = data.get('project_records')

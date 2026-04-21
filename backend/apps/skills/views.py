@@ -8,9 +8,10 @@ from rest_framework.response import Response
 from .models import Skill
 from .serializers import SkillSerializer
 from apps.notifications.models import Notification
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
-class SkillViewSet(viewsets.ModelViewSet):
+class SkillViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class   = SkillSerializer
     permission_classes = [IsNotCustomer]
 

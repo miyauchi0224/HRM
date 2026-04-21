@@ -8,6 +8,7 @@ from django.utils import timezone
 from .models import LeaveBalance, LeaveRequest
 from .serializers import LeaveBalanceSerializer, LeaveRequestSerializer
 from apps.notifications.models import Notification
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
 class LeaveBalanceViewSet(viewsets.ReadOnlyModelViewSet):
@@ -24,7 +25,7 @@ class LeaveBalanceViewSet(viewsets.ReadOnlyModelViewSet):
         return LeaveBalance.objects.filter(employee__user=user)
 
 
-class LeaveRequestViewSet(viewsets.ModelViewSet):
+class LeaveRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class   = LeaveRequestSerializer
     permission_classes = [IsNotCustomer]
 

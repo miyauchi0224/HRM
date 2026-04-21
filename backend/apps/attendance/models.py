@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.employees.models import Employee
+from apps.common.models import SoftDeleteModel
 
 
-class Project(models.Model):
+class Project(SoftDeleteModel):
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code       = models.CharField(max_length=50, unique=True, verbose_name='件番')
     name       = models.CharField(max_length=200, verbose_name='プロジェクト名')
@@ -22,7 +23,7 @@ class Project(models.Model):
         return f'{self.code} {self.name}'
 
 
-class WorkRule(models.Model):
+class WorkRule(SoftDeleteModel):
     """
     勤怠ルールマスタ。
     定時時間・休憩時間などをハードコードせずDBで管理する。
@@ -49,7 +50,7 @@ class WorkRule(models.Model):
         super().save(*args, **kwargs)
 
 
-class AttendanceRecord(models.Model):
+class AttendanceRecord(SoftDeleteModel):
     class Status(models.TextChoices):
         DRAFT     = 'draft',     '下書き'
         CONFIRMED = 'confirmed', '確定'
@@ -60,6 +61,8 @@ class AttendanceRecord(models.Model):
     date           = models.DateField(verbose_name='日付')
     clock_in       = models.TimeField(null=True, blank=True, verbose_name='出勤時刻')
     clock_out      = models.TimeField(null=True, blank=True, verbose_name='退勤時刻')
+    stamped_clock_in  = models.TimeField(null=True, blank=True, verbose_name='出勤打刻時刻（原本）')
+    stamped_clock_out = models.TimeField(null=True, blank=True, verbose_name='退勤打刻時刻（原本）')
     break_minutes  = models.PositiveIntegerField(default=60, verbose_name='休憩時間（分）')
     status         = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
     note           = models.TextField(blank=True, verbose_name='備考')
@@ -91,7 +94,7 @@ class AttendanceRecord(models.Model):
         return max(0, self.work_minutes - 480)
 
 
-class AttendanceProjectRecord(models.Model):
+class AttendanceProjectRecord(SoftDeleteModel):
     """1つの勤怠レコードに対して複数のプロジェクト・作業時間を紐付ける中間モデル"""
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     attendance = models.ForeignKey(AttendanceRecord, on_delete=models.CASCADE,
@@ -109,7 +112,7 @@ class AttendanceProjectRecord(models.Model):
         return f'{self.attendance} - {self.project.code} {self.minutes}分'
 
 
-class AttendanceModRequest(models.Model):
+class AttendanceModRequest(SoftDeleteModel):
     class Status(models.TextChoices):
         PENDING  = 'pending',  '申請中'
         APPROVED = 'approved', '承認済'

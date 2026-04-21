@@ -507,14 +507,73 @@ TODO画面は上部にカンバン、下部に日報の画面にする。
 
 
 
+# ✅ 2026-04-20 チャット・e-Learning拡張
+## チャット添付ファイル
+- ChatAttachment モデル追加（chat/models.py）→ migration 0003
+- 複数ファイル添付（FormData POST）、合計10MB制限
+- 画像: サムネイル表示 (w-40 h-28 object-cover)
+- 非画像: ファイル名＋サイズ＋ダウンロードリンク
+- 送信前プレビュー（画像は16x16サムネイル、非画像はファイル名）
+- 送信者アバター（sender_avatar）もメッセージ表示に対応
+
+## e-Learning ファイル添付
+- CourseAttachment モデル追加 → migration 0002
+- コース作成モーダルでファイル複数添付可能
+- コース詳細にファイルリンク表示
+
+## e-Learning 理解度確認テスト
+- Quiz / QuizQuestion / QuizChoice / QuizAttempt / QuizAnswer モデル追加
+- Quiz はコースに1対1（OneToOne）
+- QuizQuestion: 選択式（choice）・自由記述（free_text）の2種
+- 選択式は自動採点（is_correct判定）、自由記述はスコア対象外
+- API:
+  - GET  /api/v1/learning/courses/{id}/quiz/  → テスト取得
+  - POST /api/v1/learning/courses/{id}/quiz/create/  → テスト作成（HR専用）
+  - POST /api/v1/learning/quizzes/{id}/questions/   → 問題追加
+  - POST /api/v1/learning/quizzes/{id}/start/       → 受験開始
+  - POST /api/v1/learning/quizzes/{id}/submit/{attempt_id}/  → 提出・採点
+- フロント: テスト受験UI（選択式ラジオ/自由記述テキストエリア）・結果表示（合否・スコア）
+- フロント: HR向け問題管理タブ（問題追加・削除）
+
+
+
+
 #
-チャットに画像添付可能。
-画像はサムネイル表示。
-チャットにファイルを複数、添付可能。
-（ファイルは一度に合計10MBまで）
+出勤時刻の横に打刻時刻、退勤時刻の横に打刻時刻を表示
+
+#
+DBに登録データは削除できない。
+DBに登録したデータは非表示にすることができる。
+DBにはレコードが追加された時刻を記録する。
+これによって、全ユーザの全操作記録をDBから追跡可能。
 
 
 
 
+# ✅ 2026-04-20 論理削除・全操作ログ基盤（ソフトデリート）
 
+## 設計方針
+- DBからの物理削除を禁止。全モデルで is_deleted=True による論理削除のみ可能。
+- restore() で削除取り消し可能。
+- 全操作（作成・更新・削除・復元）を AuditLog テーブルに自動記録。
 
+## 新規 apps/common/
+- models.py  — SoftDeleteModel（abstract）+ AuditLog
+- mixins.py  — SoftDeleteViewSetMixin（destroy/restoreアクション）
+- signals.py — post_saveシグナルで全モデルのCREATE/UPDATEをログ記録
+- migrations/0001_initial.py — AuditLogテーブル作成
+
+## SoftDeleteModel の仕様
+- 追加フィールド: is_deleted, deleted_at, deleted_by
+- Model.objects     → 削除済み除外（通常クエリ）
+- Model.all_objects → 削除済みを含む全件（監査・管理用）
+- instance.soft_delete(user) → 論理削除
+- instance.restore()         → 削除取り消し
+- instance.delete()          → 内部でsoft_deleteを呼ぶ（物理削除ブロック）
+
+## 適用済みアプリ（16アプリ / 50+モデル）
+employees, attendance, chat, learning, mbo, salary, expense,
+todo, intra, evaluation, skills, approval, recruitment, assets, leave, notifications
+
+## マイグレーション適用コマンド
+docker compose exec backend python manage.py migrate

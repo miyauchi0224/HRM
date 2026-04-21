@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.employees.models import Employee
+from apps.common.models import SoftDeleteModel
 
 
-class Skill(models.Model):
+class Skill(SoftDeleteModel):
     class Category(models.TextChoices):
         LANGUAGE    = 'language',    'プログラミング言語'
         FRAMEWORK   = 'framework',   'フレームワーク'

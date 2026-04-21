@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.accounts.models import User
+from apps.common.models import SoftDeleteModel
 
 
-class Employee(models.Model):
+class Employee(SoftDeleteModel):
     class Gender(models.TextChoices):
         MALE   = 'male',   '男性'
         FEMALE = 'female', '女性'
@@ -68,7 +69,7 @@ class Employee(models.Model):
         return f'{self.last_name} {self.first_name}'
 
 
-class EmergencyContact(models.Model):
+class EmergencyContact(SoftDeleteModel):
     id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     employee     = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='emergency_contacts')
     name         = models.CharField(max_length=100, verbose_name='氏名')
@@ -80,7 +81,7 @@ class EmergencyContact(models.Model):
         ordering = ['sort_order']
 
 
-class FamilyMember(models.Model):
+class FamilyMember(SoftDeleteModel):
     class Relationship(models.TextChoices):
         SPOUSE   = 'spouse',   '配偶者'
         CHILD    = 'child',    '子'

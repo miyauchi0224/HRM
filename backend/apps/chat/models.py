@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.accounts.models import User
+from apps.common.models import SoftDeleteModel
 
 
-class ChatRoom(models.Model):
+class ChatRoom(SoftDeleteModel):
     """チャットルーム（DM または グループ）"""
 
     class RoomType(models.TextChoices):
@@ -26,7 +27,7 @@ class ChatRoom(models.Model):
         return self.name or f'DM-{self.id}'
 
 
-class ChatMessage(models.Model):
+class ChatMessage(SoftDeleteModel):
     """チャットメッセージ"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='messages')
@@ -35,7 +36,6 @@ class ChatMessage(models.Model):
     content = models.TextField(verbose_name='メッセージ内容')
     attachment_url = models.URLField(blank=True, verbose_name='添付ファイルURL')
     attachment_name = models.CharField(max_length=200, blank=True)
-    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -47,7 +47,7 @@ class ChatMessage(models.Model):
         return f'{self.sender} @ {self.room}: {self.content[:30]}'
 
 
-class MessageReadStatus(models.Model):
+class MessageReadStatus(SoftDeleteModel):
     """メッセージ既読管理"""
     message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name='read_statuses')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='read_messages')
@@ -55,3 +55,22 @@ class MessageReadStatus(models.Model):
 
     class Meta:
         unique_together = [['message', 'user']]
+
+
+class ChatAttachment(SoftDeleteModel):
+    """チャット添付ファイル（複数可）"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='chat/attachments/%Y/%m/')
+    file_name = models.CharField(max_length=255)
+    file_size = models.PositiveIntegerField(verbose_name='ファイルサイズ(bytes)')
+    content_type = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def is_image(self):
+        return self.content_type.startswith('image/')
+
+    class Meta:
+        verbose_name = '添付ファイル'
+        ordering = ['created_at']

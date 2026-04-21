@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ChatRoom, ChatMessage, MessageReadStatus
+from .models import ChatRoom, ChatMessage, MessageReadStatus, ChatAttachment
 from apps.accounts.models import User
 
 
@@ -17,14 +17,31 @@ class UserMinSerializer(serializers.ModelSerializer):
             return obj.email
 
 
+class ChatAttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChatAttachment
+        fields = ['id', 'file_name', 'file_size', 'content_type', 'is_image', 'url', 'created_at']
+
+    def get_url(self, obj):
+        request = self.context.get('request')
+        if request and obj.file:
+            return request.build_absolute_uri(obj.file.url)
+        return ''
+
+
 class ChatMessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.SerializerMethodField()
+    sender_avatar = serializers.SerializerMethodField()
     is_read = serializers.SerializerMethodField()
+    attachments = ChatAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = ChatMessage
-        fields = ['id', 'room', 'sender', 'sender_name', 'content',
-                  'attachment_url', 'attachment_name', 'is_deleted', 'created_at', 'is_read']
+        fields = ['id', 'room', 'sender', 'sender_name', 'sender_avatar', 'content',
+                  'attachment_url', 'attachment_name', 'attachments',
+                  'is_deleted', 'created_at', 'is_read']
         read_only_fields = ['sender', 'is_deleted']
 
     def get_sender_name(self, obj):
@@ -34,6 +51,19 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             return obj.sender.employee.full_name
         except Exception:
             return obj.sender.email
+
+    def get_sender_avatar(self, obj):
+        if not obj.sender:
+            return None
+        try:
+            emp = obj.sender.employee
+            if emp.avatar:
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(emp.avatar.url)
+        except Exception:
+            pass
+        return None
 
     def get_is_read(self, obj):
         request = self.context.get('request')
@@ -63,7 +93,9 @@ class ChatRoomSerializer(serializers.ModelSerializer):
                     sender_name = msg.sender.employee.full_name
                 except Exception:
                     sender_name = msg.sender.email
-            return {'content': msg.content, 'sender': sender_name, 'created_at': msg.created_at}
+            has_attachments = msg.attachments.exists()
+            content = msg.content or (f'[添付ファイル {msg.attachments.count()}件]' if has_attachments else '')
+            return {'content': content, 'sender': sender_name, 'created_at': msg.created_at}
         return None
 
     def get_unread_count(self, obj):
@@ -75,6 +107,5 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         ).exclude(sender=request.user).count()
 
     def create(self, validated_data):
-        # member_ids はビュー側で処理するためここでは除去するだけ
         validated_data.pop('member_ids', [])
         return super().create(validated_data)

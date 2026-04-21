@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.accounts.models import User
+from apps.common.models import SoftDeleteModel
 
 
-class Notification(models.Model):
+class Notification(SoftDeleteModel):
     class NotificationType(models.TextChoices):
         ATTENDANCE_MOD  = 'attendance_mod',  '打刻修正申請'
         LEAVE_REQUEST   = 'leave_request',   '休暇申請'

@@ -3,9 +3,10 @@ from django.db import models
 from django.utils import timezone
 from apps.employees.models import Employee
 from apps.accounts.models import User
+from apps.common.models import SoftDeleteModel
 
 
-class Article(models.Model):
+class Article(SoftDeleteModel):
     class Status(models.TextChoices):
         DRAFT    = 'draft',    '下書き'
         PENDING  = 'pending',  '承認待ち'
@@ -65,7 +66,7 @@ class Article(models.Model):
         return self.comments.count()
 
 
-class ArticleRead(models.Model):
+class ArticleRead(SoftDeleteModel):
     """既読管理 — 同一ユーザーは1レコードのみ"""
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     article    = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='reads')
@@ -78,7 +79,7 @@ class ArticleRead(models.Model):
         ordering        = ['-read_at']
 
 
-class ArticleComment(models.Model):
+class ArticleComment(SoftDeleteModel):
     """記事コメント"""
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     article    = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='comments')

@@ -8,15 +8,16 @@ from .models import ApprovalRequest, ApprovalStep, ApprovalTemplate
 from .serializers import ApprovalRequestSerializer, ApprovalTemplateSerializer
 from apps.notifications.models import Notification
 from apps.accounts.permissions import IsNotCustomer
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
-class ApprovalTemplateViewSet(viewsets.ModelViewSet):
+class ApprovalTemplateViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = ApprovalTemplate.objects.filter(is_active=True)
     serializer_class = ApprovalTemplateSerializer
     permission_classes = [IsNotCustomer]
 
 
-class ApprovalRequestViewSet(viewsets.ModelViewSet):
+class ApprovalRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class = ApprovalRequestSerializer
     permission_classes = [IsNotCustomer]
 

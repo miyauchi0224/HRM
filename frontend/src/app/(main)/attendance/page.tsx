@@ -171,13 +171,23 @@ export default function AttendancePage() {
             <div className="mb-6">
               <StatusBadge status={status} />
               {todayRecord?.clock_in && (
-                <p className="text-sm text-gray-500 mt-2">出勤: {todayRecord.clock_in}</p>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <p className="text-sm text-gray-700 font-medium">出勤: {todayRecord.clock_in}</p>
+                  {todayRecord.stamped_clock_in && todayRecord.stamped_clock_in !== todayRecord.clock_in && (
+                    <p className="text-xs text-gray-400">打刻: {todayRecord.stamped_clock_in}</p>
+                  )}
+                </div>
               )}
               {todayRecord?.clock_out && (
-                <p className="text-sm text-gray-500">退勤: {todayRecord.clock_out}</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-sm text-gray-700 font-medium">退勤: {todayRecord.clock_out}</p>
+                  {todayRecord.stamped_clock_out && todayRecord.stamped_clock_out !== todayRecord.clock_out && (
+                    <p className="text-xs text-gray-400">打刻: {todayRecord.stamped_clock_out}</p>
+                  )}
+                </div>
               )}
               {todayRecord?.work_minutes > 0 && (
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 mt-1">
                   労働時間: {Math.floor(todayRecord.work_minutes / 60)}時間{todayRecord.work_minutes % 60}分
                 </p>
               )}
@@ -375,8 +385,18 @@ export default function AttendancePage() {
                         <>
                           {/* 表示行 */}
                           <td className="py-2 text-xs text-gray-600 whitespace-nowrap">{r.date}</td>
-                          <td className="py-2 text-xs">{r.clock_in ?? '—'}</td>
-                          <td className="py-2 text-xs">{r.clock_out ?? '—'}</td>
+                          <td className="py-2 text-xs whitespace-nowrap">
+                            {r.clock_in ?? '—'}
+                            {r.stamped_clock_in && r.stamped_clock_in !== r.clock_in && (
+                              <span className="ml-1 text-gray-400">(打刻:{r.stamped_clock_in})</span>
+                            )}
+                          </td>
+                          <td className="py-2 text-xs whitespace-nowrap">
+                            {r.clock_out ?? '—'}
+                            {r.stamped_clock_out && r.stamped_clock_out !== r.clock_out && (
+                              <span className="ml-1 text-gray-400">(打刻:{r.stamped_clock_out})</span>
+                            )}
+                          </td>
                           <td className="py-2 text-xs">{r.break_minutes ?? '—'}</td>
                           <td className="py-2 text-xs text-gray-500">
                             {r.project_records?.length > 0

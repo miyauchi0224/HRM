@@ -7,21 +7,22 @@ from apps.accounts.permissions import IsHR, IsNotCustomer
 from .models import EvaluationPeriod, EvaluationQuestion, Evaluation360, EvaluationScore
 from .serializers import (EvaluationPeriodSerializer, EvaluationQuestionSerializer,
                           Evaluation360Serializer)
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
-class EvaluationPeriodViewSet(viewsets.ModelViewSet):
+class EvaluationPeriodViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = EvaluationPeriod.objects.all()
     serializer_class = EvaluationPeriodSerializer
     permission_classes = [IsHR]
 
 
-class EvaluationQuestionViewSet(viewsets.ModelViewSet):
+class EvaluationQuestionViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = EvaluationQuestion.objects.filter(is_active=True)
     serializer_class = EvaluationQuestionSerializer
     permission_classes = [IsHR]
 
 
-class Evaluation360ViewSet(viewsets.ModelViewSet):
+class Evaluation360ViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class = Evaluation360Serializer
     permission_classes = [IsNotCustomer]
 

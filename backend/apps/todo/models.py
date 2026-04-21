@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.employees.models import Employee
+from apps.common.models import SoftDeleteModel
 
 
-class TodoItem(models.Model):
+class TodoItem(SoftDeleteModel):
     class Status(models.TextChoices):
         NOT_STARTED = 'not_started', '未着手'
         IN_PROGRESS = 'in_progress', '作業中'
@@ -34,7 +35,7 @@ class TodoItem(models.Model):
         return f'{self.employee} - {self.title}'
 
 
-class DailyReport(models.Model):
+class DailyReport(SoftDeleteModel):
     """日報（TODO画面から記入）"""
     class Status(models.TextChoices):
         DRAFT     = 'draft',     '下書き'
