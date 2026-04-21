@@ -5,7 +5,7 @@ import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import {
   BookOpen, Plus, Play, CheckCircle, Clock, Paperclip, X,
-  FileText, ClipboardList, ChevronRight, AlertCircle
+  FileText, ClipboardList, AlertCircle
 } from 'lucide-react'
 
 interface LearningCourse {
@@ -421,7 +421,6 @@ function QuizModal({ courseId, isHR, onClose }: { courseId: string; isHR: boolea
               )}
             </div>
           ) : tab === 'take' ? (
-            /* --- 受験タブ --- */
             <div>
               {!attempt && !submitted && (
                 <div className="text-center py-8">
@@ -496,7 +495,6 @@ function QuizModal({ courseId, isHR, onClose }: { courseId: string; isHR: boolea
               )}
             </div>
           ) : (
-            /* --- 問題管理タブ（HR） --- */
             <div>
               <div className="flex justify-between items-center mb-4">
                 <p className="text-sm text-gray-600">問題数: {quiz.questions.length}問</p>

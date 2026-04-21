@@ -577,3 +577,7 @@ todo, intra, evaluation, skills, approval, recruitment, assets, leave, notificat
 
 ## マイグレーション適用コマンド
 docker compose exec backend python manage.py migrate
+
+
+docker compose exec backend python manage.py makemaigrations
+
