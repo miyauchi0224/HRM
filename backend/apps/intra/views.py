@@ -15,9 +15,10 @@ from .serializers import (
 )
 from apps.notifications.models import Notification
 from apps.accounts.models import User
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
-class ArticleViewSet(viewsets.ModelViewSet):
+class ArticleViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):

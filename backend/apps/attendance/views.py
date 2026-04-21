@@ -18,13 +18,14 @@ from .serializers import (
     AttendanceModRequestSerializer, ProjectSerializer, AttendanceSummarySerializer
 )
 from apps.notifications.models import Notification
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
 OVERTIME_WARNING_MINUTES = 40 * 60   # 40時間
 OVERTIME_ALERT_MINUTES   = 80 * 60   # 80時間（36協定）
 
 
-class ProjectViewSet(viewsets.ModelViewSet):
+class ProjectViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     """
     社員がプロジェクトを作成・編集・削除できる。
     GET /api/v1/attendance/projects/          - 一覧（アクティブのみ）
@@ -38,13 +39,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Project.objects.filter(is_active=True)
 
-    def perform_destroy(self, instance):
-        # 物理削除ではなく論理削除（is_active=False）
-        instance.is_active = False
-        instance.save()
 
-
-class AttendanceViewSet(viewsets.ModelViewSet):
+class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class   = AttendanceRecordSerializer
     permission_classes = [IsNotCustomer]
     http_method_names  = ['get', 'patch', 'head', 'options']  # PUT・DELETE は不要
@@ -92,11 +88,13 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         if AttendanceRecord.objects.filter(employee=employee, date=today).exists():
             return Response({'error': '本日はすでに出勤打刻済みです'}, status=status.HTTP_409_CONFLICT)
 
+        now_time = timezone.localtime().time()
         record = AttendanceRecord.objects.create(
-            employee = employee,
-            date     = today,
-            clock_in = timezone.localtime().time(),
-            note     = serializer.validated_data.get('note', ''),
+            employee         = employee,
+            date             = today,
+            clock_in         = now_time,
+            stamped_clock_in = now_time,
+            note             = serializer.validated_data.get('note', ''),
         )
         return Response(AttendanceRecordSerializer(record).data, status=status.HTTP_201_CREATED)
 
@@ -118,9 +116,11 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         if not record:
             return Response({'error': '出勤記録がありません'}, status=status.HTTP_404_NOT_FOUND)
 
-        record.clock_out     = timezone.localtime().time()
-        record.break_minutes = serializer.validated_data['break_minutes']
-        record.status        = AttendanceRecord.Status.CONFIRMED
+        now_time = timezone.localtime().time()
+        record.clock_out          = now_time
+        record.stamped_clock_out  = now_time
+        record.break_minutes      = serializer.validated_data['break_minutes']
+        record.status             = AttendanceRecord.Status.CONFIRMED
         record.save()
 
         # 残業アラートチェック
@@ -691,7 +691,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         return Response({'created': created, 'updated': updated, 'errors': errors})
 
 
-class AttendanceModRequestViewSet(viewsets.ModelViewSet):
+class AttendanceModRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class   = AttendanceModRequestSerializer
     permission_classes = [IsNotCustomer]
 

@@ -10,6 +10,7 @@ from django.conf import settings
 from .models import MBOGoal, MBOReport, DailyReport
 from .serializers import MBOGoalSerializer, MBOReportSerializer, DailyReportSerializer
 from apps.notifications.models import Notification
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
 def _call_bedrock(prompt: str) -> str:
@@ -31,7 +32,7 @@ def _call_bedrock(prompt: str) -> str:
         return ''
 
 
-class MBOGoalViewSet(viewsets.ModelViewSet):
+class MBOGoalViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class   = MBOGoalSerializer
     permission_classes = [IsNotCustomer]
 
@@ -140,7 +141,7 @@ class MBOGoalViewSet(viewsets.ModelViewSet):
         return Response(MBOGoalSerializer(goal).data)
 
 
-class MBOReportViewSet(viewsets.ModelViewSet):
+class MBOReportViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class   = MBOReportSerializer
     permission_classes = [IsNotCustomer]
 
@@ -215,7 +216,7 @@ class MBOReportViewSet(viewsets.ModelViewSet):
         return Response(MBOReportSerializer(report).data)
 
 
-class DailyReportViewSet(viewsets.ModelViewSet):
+class DailyReportViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class   = DailyReportSerializer
     permission_classes = [IsNotCustomer]
 

@@ -12,15 +12,16 @@ from apps.accounts.permissions import IsHR, IsNotCustomer
 from .models import Asset, AssetCategory, AssetHistory
 from .serializers import AssetSerializer, AssetCategorySerializer, AssetHistorySerializer
 from apps.employees.models import Employee
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
-class AssetCategoryViewSet(viewsets.ModelViewSet):
+class AssetCategoryViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = AssetCategory.objects.all()
     serializer_class = AssetCategorySerializer
     permission_classes = [IsNotCustomer]
 
 
-class AssetViewSet(viewsets.ModelViewSet):
+class AssetViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = Asset.objects.select_related('category', 'assigned_to').prefetch_related('history').all()
     serializer_class = AssetSerializer
     permission_classes = [IsNotCustomer]

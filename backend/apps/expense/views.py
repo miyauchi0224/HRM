@@ -15,9 +15,10 @@ from .models import AccountItem, ExpenseRequest
 from .serializers import AccountItemSerializer, ExpenseRequestSerializer
 from apps.notifications.models import Notification
 from apps.employees.models import Employee
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
-class AccountItemViewSet(viewsets.ModelViewSet):
+class AccountItemViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     """勘定科目マスタ：参照は社員以上、編集は経理以上"""
     queryset           = AccountItem.objects.filter(is_active=True)
     serializer_class   = AccountItemSerializer
@@ -106,7 +107,7 @@ class AccountItemViewSet(viewsets.ModelViewSet):
         })
 
 
-class ExpenseRequestViewSet(viewsets.ModelViewSet):
+class ExpenseRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class   = ExpenseRequestSerializer
     permission_classes = [IsNotCustomer]
 

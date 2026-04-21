@@ -2,9 +2,10 @@ import uuid
 from django.db import models
 from apps.accounts.models import User
 from apps.employees.models import Employee
+from apps.common.models import SoftDeleteModel
 
 
-class JobPosting(models.Model):
+class JobPosting(SoftDeleteModel):
     """求人票"""
 
     class EmploymentType(models.TextChoices):
@@ -41,7 +42,7 @@ class JobPosting(models.Model):
         return self.title
 
 
-class Candidate(models.Model):
+class Candidate(SoftDeleteModel):
     """応募者"""
 
     class Status(models.TextChoices):
@@ -79,7 +80,7 @@ class Candidate(models.Model):
         return self.full_name
 
 
-class Interview(models.Model):
+class Interview(SoftDeleteModel):
     """面接スケジュール"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE,

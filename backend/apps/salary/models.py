@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.employees.models import Employee
+from apps.common.models import SoftDeleteModel
 
 
-class SalaryGrade(models.Model):
+class SalaryGrade(SoftDeleteModel):
     id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     grade        = models.PositiveIntegerField(unique=True, verbose_name='等級')
     base_salary  = models.PositiveIntegerField(verbose_name='基本給（円）')
@@ -18,7 +19,7 @@ class SalaryGrade(models.Model):
         return f'等級{self.grade}: ¥{self.base_salary:,}'
 
 
-class Allowance(models.Model):
+class Allowance(SoftDeleteModel):
     class AllowanceType(models.TextChoices):
         HOUSING            = 'housing',            '住宅手当'
         SECONDMENT         = 'secondment',          '出向手当'
@@ -46,7 +47,7 @@ class Allowance(models.Model):
         return self.name
 
 
-class EmployeeAllowance(models.Model):
+class EmployeeAllowance(SoftDeleteModel):
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     employee   = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='allowances')
     allowance  = models.ForeignKey(Allowance, on_delete=models.CASCADE)
@@ -58,7 +59,7 @@ class EmployeeAllowance(models.Model):
         verbose_name = '社員手当'
 
 
-class Payslip(models.Model):
+class Payslip(SoftDeleteModel):
     class Status(models.TextChoices):
         DRAFT     = 'draft',     '計算中'
         CONFIRMED = 'confirmed', '確定済'

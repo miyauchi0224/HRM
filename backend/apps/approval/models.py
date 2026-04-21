@@ -2,9 +2,10 @@ import uuid
 from django.db import models
 from apps.accounts.models import User
 from apps.employees.models import Employee
+from apps.common.models import SoftDeleteModel
 
 
-class ApprovalTemplate(models.Model):
+class ApprovalTemplate(SoftDeleteModel):
     """稟議テンプレート（購買申請・出張申請など）"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, verbose_name='テンプレート名')
@@ -20,7 +21,7 @@ class ApprovalTemplate(models.Model):
         return self.name
 
 
-class ApprovalRequest(models.Model):
+class ApprovalRequest(SoftDeleteModel):
     """電子稟議申請"""
 
     class Category(models.TextChoices):
@@ -62,7 +63,7 @@ class ApprovalRequest(models.Model):
         return self.title
 
 
-class ApprovalStep(models.Model):
+class ApprovalStep(SoftDeleteModel):
     """稟議の承認ルート（各承認者）"""
 
     class Decision(models.TextChoices):

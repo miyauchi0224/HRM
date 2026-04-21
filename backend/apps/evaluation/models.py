@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.employees.models import Employee
+from apps.common.models import SoftDeleteModel
 
 
-class EvaluationPeriod(models.Model):
+class EvaluationPeriod(SoftDeleteModel):
     """評価期間（上期/下期）"""
 
     class PeriodType(models.TextChoices):
@@ -26,7 +27,7 @@ class EvaluationPeriod(models.Model):
         return f'{self.fiscal_year}年度 {self.get_period_type_display()}'
 
 
-class EvaluationQuestion(models.Model):
+class EvaluationQuestion(SoftDeleteModel):
     """評価項目"""
 
     class Category(models.TextChoices):
@@ -45,7 +46,7 @@ class EvaluationQuestion(models.Model):
         ordering = ['category', 'order']
 
 
-class Evaluation360(models.Model):
+class Evaluation360(SoftDeleteModel):
     """360度評価"""
 
     class EvaluatorType(models.TextChoices):
@@ -72,7 +73,7 @@ class Evaluation360(models.Model):
         unique_together = [['period', 'subject', 'evaluator']]
 
 
-class EvaluationScore(models.Model):
+class EvaluationScore(SoftDeleteModel):
     """評価項目ごとのスコア"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     evaluation = models.ForeignKey(Evaluation360, on_delete=models.CASCADE,

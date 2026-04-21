@@ -4,9 +4,10 @@ from apps.accounts.permissions import IsHR
 
 from .models import JobPosting, Candidate, Interview
 from .serializers import JobPostingSerializer, CandidateSerializer, InterviewSerializer
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
-class JobPostingViewSet(viewsets.ModelViewSet):
+class JobPostingViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = JobPosting.objects.all()
     serializer_class = JobPostingSerializer
 
@@ -19,7 +20,7 @@ class JobPostingViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user)
 
 
-class CandidateViewSet(viewsets.ModelViewSet):
+class CandidateViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = Candidate.objects.select_related('job_posting', 'assigned_to').prefetch_related('interviews').all()
     serializer_class = CandidateSerializer
     permission_classes = [IsHR]
@@ -35,7 +36,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
         return qs
 
 
-class InterviewViewSet(viewsets.ModelViewSet):
+class InterviewViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = Interview.objects.select_related('candidate', 'interviewer').all()
     serializer_class = InterviewSerializer
     permission_classes = [IsHR]

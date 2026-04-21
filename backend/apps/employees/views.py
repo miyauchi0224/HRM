@@ -18,13 +18,14 @@ from .serializers import (
     EmergencyContactSerializer,
 )
 from apps.accounts.models import User
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
 class IsHROrAdmin(IsHR):
     """IsHR と同義（共通パーミッションクラスを再利用）"""
 
 
-class EmployeeViewSet(viewsets.ModelViewSet):
+class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [IsNotCustomer]
 
     def get_queryset(self):

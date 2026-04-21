@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.employees.models import Employee
+from apps.common.models import SoftDeleteModel
 
 
-class LeaveBalance(models.Model):
+class LeaveBalance(SoftDeleteModel):
     id            = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     employee      = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='leave_balances')
     fiscal_year   = models.PositiveIntegerField(verbose_name='年度')
@@ -20,7 +21,7 @@ class LeaveBalance(models.Model):
         return self.granted_days + self.carried_days - self.used_days
 
 
-class LeaveRequest(models.Model):
+class LeaveRequest(SoftDeleteModel):
     class LeaveType(models.TextChoices):
         ANNUAL        = 'annual',        '有給休暇'
         SPECIAL       = 'special',       '特別休暇'

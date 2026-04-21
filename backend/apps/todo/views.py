@@ -6,9 +6,10 @@ from rest_framework.response import Response
 
 from .models import TodoItem, DailyReport
 from .serializers import TodoItemSerializer, DailyReportSerializer
+from apps.common.mixins import SoftDeleteViewSetMixin
 
 
-class TodoItemViewSet(viewsets.ModelViewSet):
+class TodoItemViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class   = TodoItemSerializer
     permission_classes = [IsNotCustomer]
 
@@ -32,7 +33,7 @@ class TodoItemViewSet(viewsets.ModelViewSet):
         return Response(TodoItemSerializer(item).data)
 
 
-class DailyReportViewSet(viewsets.ModelViewSet):
+class DailyReportViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     """
     日報 CRUD
     GET  /api/v1/todo/daily-reports/           一覧（自分の日報）

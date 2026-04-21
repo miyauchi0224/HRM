@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.employees.models import Employee
+from apps.common.models import SoftDeleteModel
 
 
-class AccountItem(models.Model):
+class AccountItem(SoftDeleteModel):
     class Category(models.TextChoices):
         TRAVEL        = 'travel',        '旅費交通費'
         SUPPLIES      = 'supplies',      '消耗品費'
@@ -25,7 +26,7 @@ class AccountItem(models.Model):
         return f'{self.code} {self.name}'
 
 
-class ExpenseRequest(models.Model):
+class ExpenseRequest(SoftDeleteModel):
     class ExpenseType(models.TextChoices):
         TRANSPORTATION = 'transportation', '交通費'
         GENERAL        = 'general',        '一般経費'

@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.employees.models import Employee
+from apps.common.models import SoftDeleteModel
 
 
-class AssetCategory(models.Model):
+class AssetCategory(SoftDeleteModel):
     """資産カテゴリ"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, verbose_name='カテゴリ名')
@@ -16,7 +17,7 @@ class AssetCategory(models.Model):
         return self.name
 
 
-class Asset(models.Model):
+class Asset(SoftDeleteModel):
     """社内資産（PC・スマホ・備品等）"""
 
     class Status(models.TextChoices):
@@ -60,7 +61,7 @@ class Asset(models.Model):
         return f'{self.asset_number} {self.name}'
 
 
-class AssetHistory(models.Model):
+class AssetHistory(SoftDeleteModel):
     """資産の貸出・返却・修理履歴"""
 
     class EventType(models.TextChoices):

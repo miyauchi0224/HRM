@@ -1,9 +1,10 @@
 import uuid
 from django.db import models
 from apps.employees.models import Employee
+from apps.common.models import SoftDeleteModel
 
 
-class MBOGoal(models.Model):
+class MBOGoal(SoftDeleteModel):
     class Period(models.TextChoices):
         FIRST_HALF  = 'first_half',  '上期'
         SECOND_HALF = 'second_half', '下期'
@@ -52,7 +53,7 @@ class MBOGoal(models.Model):
         return 6
 
 
-class MBOReport(models.Model):
+class MBOReport(SoftDeleteModel):
     class Status(models.TextChoices):
         DRAFT     = 'draft',     '下書き'
         SUBMITTED = 'submitted', '提出済'
@@ -75,7 +76,7 @@ class MBOReport(models.Model):
         ordering        = ['-month']
 
 
-class DailyReport(models.Model):
+class DailyReport(SoftDeleteModel):
     class Status(models.TextChoices):
         DRAFT     = 'draft',     '下書き'
         SUBMITTED = 'submitted', '提出済'

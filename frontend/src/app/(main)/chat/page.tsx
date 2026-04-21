@@ -3,7 +3,18 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { MessageSquare, Plus, Send, Users } from 'lucide-react'
+import { MessageSquare, Plus, Send, Paperclip, X, FileText, Image as ImageIcon } from 'lucide-react'
+
+const MAX_TOTAL_BYTES = 10 * 1024 * 1024 // 10MB
+
+interface ChatAttachment {
+  id: string
+  file_name: string
+  file_size: number
+  content_type: string
+  is_image: boolean
+  url: string
+}
 
 interface ChatRoom {
   id: string
@@ -18,9 +29,11 @@ interface ChatMessage {
   id: string
   sender: string | null
   sender_name: string
+  sender_avatar: string | null
   content: string
   created_at: string
   is_deleted: boolean
+  attachments: ChatAttachment[]
 }
 
 export default function ChatPage() {
@@ -28,8 +41,11 @@ export default function ChatPage() {
   const qc = useQueryClient()
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null)
   const [message, setMessage] = useState('')
+  const [files, setFiles] = useState<File[]>([])
+  const [sizeError, setSizeError] = useState('')
   const [showNewGroup, setShowNewGroup] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data: rooms = [] } = useQuery<ChatRoom[]>({
     queryKey: ['chat-rooms'],
@@ -48,12 +64,21 @@ export default function ChatPage() {
   })
 
   const sendMut = useMutation({
-    mutationFn: (content: string) =>
-      api.post('/api/v1/chat/messages/', { room: selectedRoom?.id, content }),
+    mutationFn: ({ content, files }: { content: string; files: File[] }) => {
+      const fd = new FormData()
+      fd.append('room', selectedRoom!.id)
+      fd.append('content', content)
+      files.forEach((f) => fd.append('files', f))
+      return api.post('/api/v1/chat/messages/', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['chat-messages', selectedRoom?.id] })
       qc.invalidateQueries({ queryKey: ['chat-rooms'] })
       setMessage('')
+      setFiles([])
+      setSizeError('')
     },
   })
 
@@ -67,9 +92,34 @@ export default function ChatPage() {
     return other?.full_name ?? 'DM'
   }
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(e.target.files ?? [])
+    const combined = [...files, ...selected]
+    const total = combined.reduce((s, f) => s + f.size, 0)
+    if (total > MAX_TOTAL_BYTES) {
+      setSizeError('合計ファイルサイズが10MBを超えています')
+      return
+    }
+    setSizeError('')
+    setFiles(combined)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const removeFile = (idx: number) => {
+    const updated = files.filter((_, i) => i !== idx)
+    setFiles(updated)
+    if (updated.reduce((s, f) => s + f.size, 0) <= MAX_TOTAL_BYTES) setSizeError('')
+  }
+
   const handleSend = () => {
-    if (!message.trim() || !selectedRoom) return
-    sendMut.mutate(message.trim())
+    if ((!message.trim() && files.length === 0) || !selectedRoom) return
+    sendMut.mutate({ content: message.trim(), files })
+  }
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes}B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+    return `${(bytes / 1024 / 1024).toFixed(1)}MB`
   }
 
   return (
@@ -139,23 +189,65 @@ export default function ChatPage() {
                 </p>
               </div>
             </div>
+
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {messages.map((msg) => {
                 const isMe = msg.sender_name === user?.full_name
                 return (
                   <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     {!isMe && (
-                      <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-bold shrink-0 mr-2 mt-1">
-                        {msg.sender_name.slice(0, 1)}
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 shrink-0 mr-2 mt-1">
+                        {msg.sender_avatar ? (
+                          <img src={msg.sender_avatar} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs font-bold text-gray-600">
+                            {msg.sender_name.slice(0, 1)}
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className={`max-w-xs lg:max-w-md`}>
                       {!isMe && <p className="text-xs text-gray-400 mb-1">{msg.sender_name}</p>}
-                      <div className={`px-4 py-2 rounded-2xl text-sm ${
-                        isMe ? 'bg-indigo-500 text-white rounded-br-sm' : 'bg-white text-gray-800 shadow-sm rounded-bl-sm'
-                      }`}>
-                        {msg.is_deleted ? <em className="opacity-60">このメッセージは削除されました</em> : msg.content}
-                      </div>
+                      {(msg.content && !msg.is_deleted) && (
+                        <div className={`px-4 py-2 rounded-2xl text-sm ${
+                          isMe ? 'bg-indigo-500 text-white rounded-br-sm' : 'bg-white text-gray-800 shadow-sm rounded-bl-sm'
+                        }`}>
+                          {msg.content}
+                        </div>
+                      )}
+                      {msg.is_deleted && (
+                        <div className="px-4 py-2 rounded-2xl text-sm bg-gray-100 text-gray-400 italic">
+                          このメッセージは削除されました
+                        </div>
+                      )}
+                      {/* 添付ファイル */}
+                      {msg.attachments.length > 0 && (
+                        <div className={`mt-1 flex flex-wrap gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                          {msg.attachments.map((att) => (
+                            att.is_image ? (
+                              <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer">
+                                <img
+                                  src={att.url}
+                                  alt={att.file_name}
+                                  className="w-40 h-28 object-cover rounded-xl border shadow-sm hover:opacity-90 transition"
+                                />
+                              </a>
+                            ) : (
+                              <a
+                                key={att.id}
+                                href={att.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 bg-white border rounded-xl px-3 py-2 text-sm hover:bg-gray-50 shadow-sm"
+                              >
+                                <FileText size={16} className="text-gray-500 shrink-0" />
+                                <span className="text-gray-700 truncate max-w-[140px]">{att.file_name}</span>
+                                <span className="text-xs text-gray-400 shrink-0">{formatSize(att.file_size)}</span>
+                              </a>
+                            )
+                          ))}
+                        </div>
+                      )}
                       <p className={`text-xs text-gray-400 mt-1 ${isMe ? 'text-right' : 'text-left'}`}>
                         {new Date(msg.created_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -165,23 +257,74 @@ export default function ChatPage() {
               })}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* 入力エリア */}
             <div className="bg-white border-t p-4">
-              <div className="flex gap-3">
+              {/* 選択中ファイルプレビュー */}
+              {files.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {files.map((f, i) => {
+                    const isImg = f.type.startsWith('image/')
+                    const previewUrl = isImg ? URL.createObjectURL(f) : null
+                    return (
+                      <div key={i} className="relative group">
+                        {isImg && previewUrl ? (
+                          <img src={previewUrl} alt={f.name} className="w-16 h-16 object-cover rounded-lg border" />
+                        ) : (
+                          <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1 text-xs text-gray-600 max-w-[120px]">
+                            <FileText size={12} className="shrink-0" />
+                            <span className="truncate">{f.name}</span>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => removeFile(i)}
+                          className="absolute -top-1.5 -right-1.5 bg-gray-700 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {sizeError && <p className="text-xs text-red-500 mb-2">{sizeError}</p>}
+              <div className="flex gap-2 items-end">
                 <input
-                  className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileChange}
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2.5 rounded-xl border text-gray-500 hover:bg-gray-50 shrink-0"
+                  title="ファイルを添付（合計10MBまで）"
+                >
+                  <Paperclip size={18} />
+                </button>
+                <textarea
+                  className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
                   placeholder="メッセージを入力..."
+                  rows={1}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+                  }}
                 />
                 <button
                   onClick={handleSend}
-                  disabled={!message.trim()}
-                  className="bg-indigo-600 text-white p-2.5 rounded-xl hover:bg-indigo-700 disabled:opacity-40"
+                  disabled={!message.trim() && files.length === 0}
+                  className="bg-indigo-600 text-white p-2.5 rounded-xl hover:bg-indigo-700 disabled:opacity-40 shrink-0"
                 >
                   <Send size={18} />
                 </button>
               </div>
+              <p className="text-xs text-gray-400 mt-1.5">
+                Shift+Enter で改行 ／ ファイル合計 {formatSize(files.reduce((s, f) => s + f.size, 0))} / 10MB
+              </p>
             </div>
           </>
         ) : (
@@ -194,7 +337,6 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* グループ作成モーダル */}
       {showNewGroup && (
         <NewGroupModal onClose={() => setShowNewGroup(false)} onCreated={(room) => {
           qc.invalidateQueries({ queryKey: ['chat-rooms'] })
