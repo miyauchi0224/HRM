@@ -389,14 +389,22 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='org-chart')
     def org_chart(self, request):
         """GET /api/v1/employees/org-chart/ - 組織図データ"""
-        employees = Employee.objects.prefetch_related('managers', 'subordinates').all()
+        employees = Employee.objects.select_related('user').prefetch_related('managers', 'subordinates').all()
+        request_base = request.build_absolute_uri('/')[:-1]
         data = []
         for emp in employees:
+            avatar_url = None
+            if emp.avatar:
+                avatar_url = f'{request_base}{emp.avatar.url}'
             data.append({
-                'id':           str(emp.id),
-                'full_name':    emp.full_name,
-                'department':   emp.department,
-                'position':     emp.position,
-                'manager_ids':  [str(m.id) for m in emp.managers.all()],
+                'id':              str(emp.id),
+                'full_name':       emp.full_name,
+                'department':      emp.department,
+                'position':        emp.position,
+                'grade':           emp.grade,
+                'employment_type': emp.employment_type,
+                'is_active':       emp.retire_date is None,
+                'avatar_url':      avatar_url,
+                'manager_ids':     [str(m.id) for m in emp.managers.all()],
             })
         return Response(data)

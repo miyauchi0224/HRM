@@ -1,9 +1,10 @@
 import anthropic
+import json
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from apps.accounts.permissions import IsNotCustomer
+from apps.accounts.permissions import IsNotCustomer, IsHR
 
 
 def get_client(user=None):
@@ -89,6 +90,190 @@ class DraftMBOReportView(APIView):
         except Exception as e:
             return Response({'error': f'AI生成に失敗しました: {str(e)}'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DraftMBOGoalView(APIView):
+    """AIがMBO目標の文章を下書き（役職・注力分野から生成）"""
+    permission_classes = [IsNotCustomer]
+
+    def post(self, request):
+        role = request.data.get('role', '')
+        focus_area = request.data.get('focus_area', '')
+        if not role or not focus_area:
+            return Response({'error': '役職と注力分野を入力してください'}, status=status.HTTP_400_BAD_REQUEST)
+
+        client = get_client(request.user)
+        if not client:
+            return Response({'error': 'AI機能が設定されていません（APIキーが未設定）'},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        prompt = f"""あなたは人事コンサルタントです。以下の情報をもとに、MBOの目標文章を3つ提案してください。
+各目標は「具体的・測定可能・達成可能・関連性がある・期限がある（SMART）」原則に従って、日本語100字以内で記述してください。
+番号付きリスト形式で返してください。
+
+役職: {role}
+注力分野: {focus_area}
+
+目標案:"""
+
+        try:
+            message = client.messages.create(
+                model='claude-haiku-4-5-20251001',
+                max_tokens=600,
+                messages=[{'role': 'user', 'content': prompt}],
+            )
+            draft = message.content[0].text if message.content else ''
+            return Response({'draft': draft})
+        except Exception as e:
+            return Response({'error': f'AI生成に失敗しました: {str(e)}'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class HRQueryView(APIView):
+    """HR向け自然言語クエリ — 社内データをAIが回答"""
+    permission_classes = [IsHR]
+
+    def post(self, request):
+        question = request.data.get('question', '').strip()
+        if not question:
+            return Response({'error': '質問を入力してください'}, status=status.HTTP_400_BAD_REQUEST)
+
+        client = get_client(request.user)
+        if not client:
+            return Response({'error': 'AI機能が設定されていません（APIキーが未設定）'},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        # 利用可能なツール定義（Claude tool_use）
+        tools = [
+            {
+                'name': 'get_employee_list',
+                'description': '社員一覧を取得する。氏名・部署・役職・在職状況を含む。',
+                'input_schema': {
+                    'type': 'object',
+                    'properties': {
+                        'department': {'type': 'string', 'description': '部署名でフィルタ（省略可）'},
+                    },
+                    'required': [],
+                },
+            },
+            {
+                'name': 'get_attendance_summary',
+                'description': '指定社員の指定月の勤怠サマリー（残業時間・出勤日数）を取得する。',
+                'input_schema': {
+                    'type': 'object',
+                    'properties': {
+                        'employee_id': {'type': 'string', 'description': '社員UUID'},
+                        'year_month':  {'type': 'string', 'description': 'YYYY-MM形式'},
+                    },
+                    'required': ['employee_id', 'year_month'],
+                },
+            },
+            {
+                'name': 'get_leave_balance',
+                'description': '指定社員の有給残日数を取得する。',
+                'input_schema': {
+                    'type': 'object',
+                    'properties': {
+                        'employee_id': {'type': 'string', 'description': '社員UUID'},
+                    },
+                    'required': ['employee_id'],
+                },
+            },
+        ]
+
+        try:
+            messages = [{'role': 'user', 'content': question}]
+            answer = self._run_agent_loop(client, tools, messages, request)
+            return Response({'answer': answer})
+        except Exception as e:
+            return Response({'error': f'AI処理に失敗しました: {str(e)}'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _run_agent_loop(self, client, tools, messages, request):
+        """tool_use のエージェントループ（最大3ターン）"""
+        from apps.employees.models import Employee
+        from apps.attendance.models import AttendanceRecord
+        from apps.leave.models import LeaveBalance
+        from datetime import date
+
+        for _ in range(3):
+            resp = client.messages.create(
+                model='claude-sonnet-4-6',
+                max_tokens=1024,
+                tools=tools,
+                messages=messages,
+            )
+
+            if resp.stop_reason == 'end_turn':
+                for block in resp.content:
+                    if hasattr(block, 'text'):
+                        return block.text
+                return ''
+
+            if resp.stop_reason != 'tool_use':
+                break
+
+            tool_results = []
+            for block in resp.content:
+                if block.type != 'tool_use':
+                    continue
+                tool_name = block.name
+                tool_input = block.input
+
+                if tool_name == 'get_employee_list':
+                    qs = Employee.objects.select_related('user').all()
+                    dept = tool_input.get('department')
+                    if dept:
+                        qs = qs.filter(department__icontains=dept)
+                    result = [
+                        {'id': str(e.id), 'full_name': e.full_name,
+                         'department': e.department, 'position': e.position,
+                         'is_active': e.retire_date is None}
+                        for e in qs[:50]
+                    ]
+
+                elif tool_name == 'get_attendance_summary':
+                    emp_id = tool_input.get('employee_id')
+                    ym = tool_input.get('year_month', date.today().strftime('%Y-%m'))
+                    year, month = ym.split('-')
+                    records = list(AttendanceRecord.objects.filter(
+                        employee_id=emp_id, date__year=year, date__month=month,
+                    ))
+                    total_work = sum(r.work_minutes for r in records)
+                    total_ot   = sum(r.overtime_minutes for r in records)
+                    result = {
+                        'year_month': ym,
+                        'work_days': len(records),
+                        'total_work_hours': round(total_work / 60, 1),
+                        'total_overtime_hours': round(total_ot / 60, 1),
+                    }
+
+                elif tool_name == 'get_leave_balance':
+                    emp_id = tool_input.get('employee_id')
+                    fiscal_year = date.today().year if date.today().month >= 4 else date.today().year - 1
+                    bal = LeaveBalance.objects.filter(
+                        employee_id=emp_id, fiscal_year=fiscal_year
+                    ).first()
+                    result = {
+                        'fiscal_year': fiscal_year,
+                        'remaining_days': float(bal.remaining_days) if bal else None,
+                        'used_days': float(bal.used_days) if bal else None,
+                    }
+                else:
+                    result = {'error': f'未知のツール: {tool_name}'}
+
+                tool_results.append({
+                    'type': 'tool_result',
+                    'tool_use_id': block.id,
+                    'content': json.dumps(result, ensure_ascii=False),
+                })
+
+            messages = messages + [
+                {'role': 'assistant', 'content': resp.content},
+                {'role': 'user', 'content': tool_results},
+            ]
+
+        return 'AI処理が完了しませんでした。'
 
 
 class AnalyzeExpenseReceiptView(APIView):

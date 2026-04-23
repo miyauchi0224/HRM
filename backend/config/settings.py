@@ -47,6 +47,9 @@ LOCAL_APPS = [
     'apps.learning',
     'apps.analytics',
     'apps.ai_assistant',
+    'apps.onboarding',
+    'apps.documents',
+    'apps.stress_check',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

@@ -21,8 +21,10 @@ from apps.notifications.models import Notification
 from apps.common.mixins import SoftDeleteViewSetMixin
 
 
-OVERTIME_WARNING_MINUTES = 40 * 60   # 40時間
-OVERTIME_ALERT_MINUTES   = 80 * 60   # 80時間（36協定）
+OVERTIME_WARNING_MINUTES        = 45 * 60   # 45時間（36協定 一般上限）
+OVERTIME_ALERT_MINUTES          = 60 * 60   # 60時間（特別条項 月上限）
+OVERTIME_ANNUAL_WARNING_MINUTES = 320 * 60  # 320時間（年360h の手前警告）
+OVERTIME_ANNUAL_ALERT_MINUTES   = 360 * 60  # 360時間（36協定 年間上限）
 
 
 class ProjectViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
@@ -129,29 +131,54 @@ class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         return Response(AttendanceRecordSerializer(record).data)
 
     def _check_overtime_alert(self, employee, record):
-        """月間残業時間が閾値を超えたら通知"""
-        # list() で一度だけ評価してループ
-        records = list(AttendanceRecord.objects.filter(
-            employee=employee,
-            date__year=record.date.year,
-            date__month=record.date.month,
+        """月間・年間残業時間が36協定閾値を超えたら通知"""
+        year  = record.date.year
+        month = record.date.month
+
+        # 月間チェック
+        monthly_records = list(AttendanceRecord.objects.filter(
+            employee=employee, date__year=year, date__month=month,
         ))
-        total_overtime = sum(r.overtime_minutes for r in records)
-        if total_overtime >= OVERTIME_ALERT_MINUTES:
+        monthly_overtime = sum(r.overtime_minutes for r in monthly_records)
+
+        if monthly_overtime >= OVERTIME_ALERT_MINUTES:
             Notification.send(
                 user=employee.user,
                 type_=Notification.NotificationType.OVERTIME_ALERT,
-                title='【緊急】残業時間アラート',
-                message=f'今月の残業時間が{total_overtime // 60}時間を超えました。36協定の上限に達しています。',
-                related_url='/attendance/report',
+                title='【緊急】月間残業 60時間超',
+                message=f'今月の残業が{monthly_overtime // 60}時間に達しました。36協定の特別条項上限（60h）を超えています。',
+                related_url='/attendance',
             )
-        elif total_overtime >= OVERTIME_WARNING_MINUTES:
+        elif monthly_overtime >= OVERTIME_WARNING_MINUTES:
             Notification.send(
                 user=employee.user,
                 type_=Notification.NotificationType.OVERTIME_ALERT,
-                title='残業時間警告',
-                message=f'今月の残業時間が{total_overtime // 60}時間になりました。',
-                related_url='/attendance/report',
+                title='月間残業 45時間超 警告',
+                message=f'今月の残業が{monthly_overtime // 60}時間になりました。36協定の一般上限（45h）を超えています。',
+                related_url='/attendance',
+            )
+
+        # 年間チェック（当年1月〜現在月）
+        annual_records = list(AttendanceRecord.objects.filter(
+            employee=employee, date__year=year,
+        ))
+        annual_overtime = sum(r.overtime_minutes for r in annual_records)
+
+        if annual_overtime >= OVERTIME_ANNUAL_ALERT_MINUTES:
+            Notification.send(
+                user=employee.user,
+                type_=Notification.NotificationType.OVERTIME_ANNUAL_ALERT,
+                title='【緊急】年間残業 360時間超',
+                message=f'今年の残業累計が{annual_overtime // 60}時間に達しました。36協定の年間上限（360h）を超えています。',
+                related_url='/attendance',
+            )
+        elif annual_overtime >= OVERTIME_ANNUAL_WARNING_MINUTES:
+            Notification.send(
+                user=employee.user,
+                type_=Notification.NotificationType.OVERTIME_ANNUAL_ALERT,
+                title='年間残業 320時間超 警告',
+                message=f'今年の残業累計が{annual_overtime // 60}時間になりました。年間上限（360h）まで残り{(OVERTIME_ANNUAL_ALERT_MINUTES - annual_overtime) // 60}時間です。',
+                related_url='/attendance',
             )
 
     @action(detail=False, methods=['get'], url_path='summary')
@@ -178,6 +205,52 @@ class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             'total_overtime_minutes': total_overtime,
             'overtime_alert':         total_overtime >= OVERTIME_ALERT_MINUTES,
         })
+
+    @action(detail=False, methods=['get'], url_path='overtime-dashboard')
+    def overtime_dashboard(self, request):
+        """
+        GET /api/v1/attendance/overtime-dashboard/?year_month=2026-04
+        HR専用: 全社員の月間・年間残業時間一覧（36協定状況モニタリング）
+        """
+        if not request.user.is_manager:
+            return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
+
+        year_month = request.query_params.get('year_month', date.today().strftime('%Y-%m'))
+        year, month = map(int, year_month.split('-'))
+
+        from apps.employees.models import Employee
+        employees = Employee.objects.select_related('user').all()
+
+        result = []
+        for emp in employees:
+            monthly = list(AttendanceRecord.objects.filter(
+                employee=emp, date__year=year, date__month=month,
+            ))
+            annual = list(AttendanceRecord.objects.filter(
+                employee=emp, date__year=year,
+            ))
+            monthly_ot = sum(r.overtime_minutes for r in monthly)
+            annual_ot  = sum(r.overtime_minutes for r in annual)
+
+            if monthly_ot >= OVERTIME_ALERT_MINUTES or annual_ot >= OVERTIME_ANNUAL_ALERT_MINUTES:
+                risk = 'red'
+            elif monthly_ot >= OVERTIME_WARNING_MINUTES or annual_ot >= OVERTIME_ANNUAL_WARNING_MINUTES:
+                risk = 'yellow'
+            else:
+                risk = 'green'
+
+            result.append({
+                'employee_id':             str(emp.id),
+                'employee_number':         emp.employee_number,
+                'full_name':               emp.full_name,
+                'department':              emp.department,
+                'monthly_overtime_hours':  round(monthly_ot / 60, 1),
+                'annual_overtime_hours':   round(annual_ot / 60, 1),
+                'risk_level':              risk,
+            })
+
+        result.sort(key=lambda x: x['monthly_overtime_hours'], reverse=True)
+        return Response({'year_month': year_month, 'employees': result})
 
     @action(detail=False, methods=['get'], url_path='template')
     def template(self, request):
