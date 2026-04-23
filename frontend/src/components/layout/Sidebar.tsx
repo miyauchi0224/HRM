@@ -8,6 +8,7 @@ import {
   Receipt, Award, Bell, Settings, LogOut, Building2,
   CheckSquare, Newspaper, Calculator, FileText, MessageSquare,
   UserPlus, Package, BarChart2, Star, BookOpen, Bot,
+  FolderOpen, ClipboardList, HeartPulse,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -25,10 +26,14 @@ const navItems: NavItem[] = [
   { href: '/expense',       label: '経費申請',       icon: Receipt },
   { href: '/skills',        label: '取得資格登録',   icon: Award },
   { href: '/notifications', label: '通知',           icon: Bell },
-  { href: '/approval',     label: '電子稟議',       icon: FileText },
-  { href: '/chat',         label: 'チャット',       icon: MessageSquare },
-  { href: '/evaluation',   label: '360度評価',      icon: Star },
-  { href: '/learning',     label: '研修・e-Learning', icon: BookOpen },
+  { href: '/approval',      label: '電子稟議',       icon: FileText },
+  { href: '/chat',          label: 'チャット',       icon: MessageSquare },
+  { href: '/evaluation',    label: '360度評価',      icon: Star },
+  { href: '/learning',      label: '研修・e-Learning', icon: BookOpen },
+  { href: '/documents',     label: 'ドキュメント',   icon: FolderOpen },
+  { href: '/stress-check',  label: 'ストレスチェック', icon: HeartPulse },
+  { href: '/onboarding',    label: 'オンボーディング', icon: ClipboardList },
+  { href: '/ai',            label: 'AIアシスタント', icon: Bot },
 ]
 
 // ===== 顧客専用メニュー（社内情報は閲覧不可）=====
@@ -52,7 +57,7 @@ const accountingItems: NavItem[] = [
 
 // ===== 人事・管理者が見る人事メニュー =====
 const hrItems: NavItem[] = [
-  { href: '/recruitment', label: '採用管理',        icon: UserPlus },
+  { href: '/recruitment', label: '採用管理',           icon: UserPlus },
   { href: '/analytics',   label: '分析ダッシュボード', icon: BarChart2 },
 ]
 

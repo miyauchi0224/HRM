@@ -25,6 +25,9 @@ urlpatterns = [
     path('api/v1/learning/',      include('apps.learning.urls')),
     path('api/v1/analytics/',     include('apps.analytics.urls')),
     path('api/v1/ai/',            include('apps.ai_assistant.urls')),
+    path('api/v1/onboarding/',    include('apps.onboarding.urls')),
+    path('api/v1/documents/',     include('apps.documents.urls')),
+    path('api/v1/stress-check/',  include('apps.stress_check.urls')),
     # API ドキュメント
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/',   SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

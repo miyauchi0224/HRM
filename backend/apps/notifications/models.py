@@ -10,10 +10,13 @@ class Notification(SoftDeleteModel):
         LEAVE_REQUEST   = 'leave_request',   '休暇申請'
         MBO_FEEDBACK    = 'mbo_feedback',    'MBOフィードバック'
         EXPENSE_REQUEST = 'expense_request', '経費申請'
-        OVERTIME_ALERT  = 'overtime_alert',  '残業時間アラート'
-        LEAVE_ALERT     = 'leave_alert',     '有給残日数アラート'
-        SKILL_EXPIRY    = 'skill_expiry',    '資格有効期限アラート'
-        SYSTEM          = 'system',          'システム通知'
+        OVERTIME_ALERT        = 'overtime_alert',        '残業時間アラート（月）'
+        OVERTIME_ANNUAL_ALERT = 'overtime_annual_alert', '残業時間アラート（年）'
+        LEAVE_ALERT           = 'leave_alert',           '有給残日数アラート'
+        SKILL_EXPIRY          = 'skill_expiry',          '資格有効期限アラート'
+        SYSTEM                = 'system',                'システム通知'
+        STRESS_CHECK          = 'stress_check',          'ストレスチェック'
+        ONBOARDING            = 'onboarding',            'オンボーディング'
 
     id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user        = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')

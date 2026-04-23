@@ -2,14 +2,15 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { useAuthStore } from '@/lib/store'
 import {
   Clock, Play, Square, Download, Upload,
   FileSpreadsheet, FileText, File,
-  ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check,
+  ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check, ShieldAlert,
 } from 'lucide-react'
 
 type AttendanceStatus = 'not_started' | 'working' | 'break' | 'done'
-type Tab = 'clock' | 'export' | 'upload' | 'projects'
+type Tab = 'clock' | 'export' | 'upload' | 'projects' | 'overtime36'
 
 // ===== 月ナビゲーション用ユーティリティ =====
 function addMonths(ym: string, delta: number): string {
@@ -32,6 +33,8 @@ interface EditData {
 
 export default function AttendancePage() {
   const qc = useQueryClient()
+  const user = useAuthStore((s) => s.user)
+  const isManager = user?.role && ['supervisor', 'manager', 'hr', 'accounting', 'admin'].includes(user.role)
   const [breakMinutes, setBreakMinutes] = useState(60)
   const [activeTab, setActiveTab]       = useState<Tab>('clock')
   const [yearMonth, setYearMonth]       = useState(() => new Date().toISOString().slice(0, 7))
@@ -132,10 +135,11 @@ export default function AttendancePage() {
   const status = getStatus()
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'clock',    label: '打刻' },
-    { key: 'export',   label: 'エクスポート' },
-    { key: 'upload',   label: 'アップロード' },
-    { key: 'projects', label: 'プロジェクト' },
+    { key: 'clock',      label: '打刻' },
+    { key: 'export',     label: 'エクスポート' },
+    { key: 'upload',     label: 'アップロード' },
+    { key: 'projects',   label: 'プロジェクト' },
+    ...(isManager ? [{ key: 'overtime36' as Tab, label: '36協定状況' }] : []),
   ]
 
   return (
@@ -456,6 +460,11 @@ export default function AttendancePage() {
       {/* === タブ: プロジェクト === */}
       {activeTab === 'projects' && (
         <ProjectsPanel />
+      )}
+
+      {/* === タブ: 36協定状況 === */}
+      {activeTab === 'overtime36' && (
+        <OvertimeDashboardPanel />
       )}
     </div>
   )
@@ -959,6 +968,100 @@ function NewProjectModal({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ===== 36協定状況ダッシュボード =====
+function OvertimeDashboardPanel() {
+  const [yearMonth, setYearMonth] = useState(() => new Date().toISOString().slice(0, 7))
+
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ['overtime-dashboard', yearMonth],
+    queryFn: () => api.get(`/api/v1/attendance/overtime-dashboard/?year_month=${yearMonth}`).then((r) => r.data),
+  })
+
+  const RISK_CONFIG = {
+    green:  { label: '正常',   badge: 'bg-green-100 text-green-700',  row: '' },
+    yellow: { label: '警告',   badge: 'bg-yellow-100 text-yellow-700', row: 'bg-yellow-50' },
+    red:    { label: '超過',   badge: 'bg-red-100 text-red-700',      row: 'bg-red-50' },
+  }
+
+  const employees: any[] = data?.employees ?? []
+  const redCount    = employees.filter((e) => e.risk_level === 'red').length
+  const yellowCount = employees.filter((e) => e.risk_level === 'yellow').length
+
+  return (
+    <div className="max-w-4xl">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <ShieldAlert size={20} className="text-orange-500" />
+          <h2 className="font-semibold text-gray-700">36協定 残業時間モニタリング</h2>
+        </div>
+        <input
+          type="month"
+          value={yearMonth}
+          onChange={(e) => setYearMonth(e.target.value)}
+          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {[
+          { label: '全社員', value: employees.length, cls: 'bg-white border-gray-200 text-gray-700' },
+          { label: '⚠ 警告（45h超）', value: yellowCount, cls: 'bg-yellow-50 border-yellow-200 text-yellow-700' },
+          { label: '🚨 超過（60h超/360h超）', value: redCount, cls: 'bg-red-50 border-red-200 text-red-700' },
+        ].map((item) => (
+          <div key={item.label} className={`rounded-xl border p-4 text-center ${item.cls}`}>
+            <p className="text-2xl font-bold">{item.value}</p>
+            <p className="text-xs mt-1">{item.label}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        {isLoading ? (
+          <p className="text-gray-400 text-sm p-6 text-center">読み込み中...</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr className="text-gray-500 text-xs">
+                <th className="text-left px-4 py-3 font-medium">社員番号</th>
+                <th className="text-left px-4 py-3 font-medium">氏名</th>
+                <th className="text-left px-4 py-3 font-medium">部署</th>
+                <th className="text-right px-4 py-3 font-medium">月間残業(h)</th>
+                <th className="text-right px-4 py-3 font-medium">年間残業(h)</th>
+                <th className="text-center px-4 py-3 font-medium">状態</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {employees.map((emp) => {
+                const cfg = RISK_CONFIG[emp.risk_level as keyof typeof RISK_CONFIG]
+                return (
+                  <tr key={emp.employee_id} className={`hover:brightness-95 transition-colors ${cfg.row}`}>
+                    <td className="px-4 py-3 text-gray-500">{emp.employee_number}</td>
+                    <td className="px-4 py-3 font-medium text-gray-800">{emp.full_name}</td>
+                    <td className="px-4 py-3 text-gray-600">{emp.department}</td>
+                    <td className="px-4 py-3 text-right font-mono">{emp.monthly_overtime_hours}</td>
+                    <td className="px-4 py-3 text-right font-mono">{emp.annual_overtime_hours}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${cfg.badge}`}>
+                        {cfg.label}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+              {employees.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">データがありません</td></tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <p className="text-xs text-gray-400 mt-2">
+        閾値: 月45h超で警告 / 月60h超または年360h超で超過（36協定基準）
+      </p>
     </div>
   )
 }
