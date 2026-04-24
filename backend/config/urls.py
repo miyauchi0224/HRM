@@ -28,6 +28,8 @@ urlpatterns = [
     path('api/v1/onboarding/',    include('apps.onboarding.urls')),
     path('api/v1/documents/',     include('apps.documents.urls')),
     path('api/v1/stress-check/',  include('apps.stress_check.urls')),
+    path('api/v1/calendar/',      include('apps.calendar_sync.urls')),
+    path('api/v1/compliance/',    include('apps.compliance.urls')),
     # API ドキュメント
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/',   SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

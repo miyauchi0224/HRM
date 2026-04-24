@@ -50,6 +50,8 @@ LOCAL_APPS = [
     'apps.onboarding',
     'apps.documents',
     'apps.stress_check',
+    'apps.calendar_sync',
+    'apps.compliance',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -157,3 +159,9 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': '人事管理システム API',
     'VERSION': '1.0.0',
 }
+
+# ── OAuth 設定（Microsoft / Google） ──────────────────────────────
+MICROSOFT_CLIENT_ID = config('MICROSOFT_CLIENT_ID', default='')
+MICROSOFT_CLIENT_SECRET = config('MICROSOFT_CLIENT_SECRET', default='')
+GOOGLE_CLIENT_ID = config('GOOGLE_CLIENT_ID', default='')
+GOOGLE_CLIENT_SECRET = config('GOOGLE_CLIENT_SECRET', default='')
