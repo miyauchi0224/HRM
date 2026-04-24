@@ -3,8 +3,10 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { Clock, Calendar, Target, Bell, CheckSquare, Newspaper, Pin, Play, Square } from 'lucide-react'
+import { Clock, Calendar, Target, Bell, CheckSquare, Newspaper, Pin, Play, Square, GanttChartSquare } from 'lucide-react'
 import Link from 'next/link'
+import CalendarPanel from './components/CalendarPanel'
+import ComplianceChecklist from './components/ComplianceChecklist'
 
 export default function DashboardPage() {
   const user       = useAuthStore((s) => s.user)
@@ -72,6 +74,12 @@ export default function DashboardPage() {
   const { data: recentArticles = [] } = useQuery<any[]>({
     queryKey: ['intra-recent'],
     queryFn: () => api.get('/api/v1/intra/articles/recent/').then((r) => r.data),
+  })
+
+  const { data: myTasks = [] } = useQuery<any[]>({
+    queryKey: ['my-project-tasks'],
+    queryFn: () => api.get('/api/v1/attendance/project-tasks/?status=todo,in_progress,review').then((r) => r.data.results ?? r.data),
+    enabled: !isCustomer,
   })
 
   return (
@@ -153,6 +161,60 @@ export default function DashboardPage() {
           href="/mbo"
         />
       </div>
+
+      {/* カレンダー */}
+      {!isCustomer && <CalendarPanel />}
+
+      {/* コンプライアンスチェックリスト */}
+      {!isCustomer && <ComplianceChecklist />}
+
+      {/* プロジェクトタスク（自分のガントチャート） */}
+      {!isCustomer && myTasks.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-gray-700 flex items-center gap-2">
+              <GanttChartSquare size={16} className="text-blue-500" /> 自分のプロジェクトタスク
+            </h2>
+            <Link href="/project" className="text-xs text-blue-600 hover:underline">プロジェクト管理へ</Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-100">
+                  <th className="text-left pb-2 font-medium w-48">タスク名</th>
+                  <th className="text-left pb-2 font-medium w-24">プロジェクト</th>
+                  <th className="text-left pb-2 font-medium w-20">ステータス</th>
+                  <th className="text-right pb-2 font-medium w-12">進捗</th>
+                  <th className="pb-2 min-w-[200px]">期間</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {myTasks.slice(0, 8).map((task: any) => {
+                  const STATUS_COLOR: Record<string, string> = { todo: 'bg-gray-300', in_progress: 'bg-blue-400', review: 'bg-yellow-400', done: 'bg-green-400' }
+                  const STATUS_TEXT: Record<string, string> = { todo: '未着手', in_progress: '進行中', review: 'レビュー中', done: '完了' }
+                  return (
+                    <tr key={task.id} className="hover:bg-gray-50">
+                      <td className="py-2 font-medium text-gray-800 truncate pr-2">{task.title}</td>
+                      <td className="py-2 text-gray-500 truncate pr-2">{task.project_code}</td>
+                      <td className="py-2">
+                        <span className={`px-1.5 py-0.5 rounded text-white text-xs ${STATUS_COLOR[task.status]}`}>{STATUS_TEXT[task.status]}</span>
+                      </td>
+                      <td className="py-2 text-right text-gray-500">{task.progress}%</td>
+                      <td className="py-2 px-2">
+                        {task.start_date ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400 whitespace-nowrap">{task.start_date.slice(5)} 〜 {task.end_date?.slice(5) ?? '?'}</span>
+                          </div>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* TODOリスト */}

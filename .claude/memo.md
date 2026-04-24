@@ -588,4 +588,380 @@ docker compose exec backend python manage.py makemaigrations
 
 
 
+＃
+ドキュメント管理、ドラッグで持っていける。doc,xls,ppt,pdfなどはサムネイル表示可能。
+公開範囲にロール、プロジェクトを追加
+
+電子稟議
+起案時に見積書添付。複数添付可。
+
+チャット
+既存グループにメンバ追加可能。メンバ削除可能。
+
+経費申請
+領収書添付。複数添付可。jpg,png,pdfなどはサムネイル表示。ダウンロード可能。
+
+採用管理
+求人一覧で選択すると、求人内容の確認ができる。
+応募者の確認ができる。
+
+「プロジェクト管理」画面の追加
+プロジェクトの進行度をガントチャートで表示。
+作業項目の追加編集可能。
+プロジェクトの作業項目はチケット単位。
+プロジェクトの作業項目、工程表のテンプレートダウンロード可能で、アップロードで一括登録。
+
+ダッシュボードに自分のプロジェクトのガントチャートを表示
+
+
+36協定状況
+代表者：表示
+
+出退勤管理
+勤怠一覧にて、出勤の横に出勤打刻時刻、退勤の横に退勤打刻時刻を表示（編集可能）
+退勤の打刻はいつでも打刻可能。
+24時でリセット。1日に1回まで出勤打刻可能。出勤打刻されると、退勤打刻をいつでも可能。
+
+資格登録
+社外の資格登録には、PDFまたはJPG、PNGなどの添付可能。
+
+社員登録に顧客登録可能
+社員登録にメールアドレス、電話番号は必須。
+
+月報に行動内容、結果・考察に追加して「次月の課題」
+
+以下の項目でAIアシスタントによる文章提案
+日報。
+月報の行動内容、結果・考察、次月の課題。
+イントラ記事
+目標と達成水準
+採用管理の求人
+
+
+
+360度評価
+評価可能。
+
+
+ストレスチェック機能 
+ GET http://localhost:3000/stress-check/3837a52f-3de1-4b10-a4a8-562c79e0ee4f/analysis 404 (Not Found)
+
+
+
+#
+勤怠管理
+各項目をダブルクリックで編集
+
+目標登録で不具合、ウェイト100なのに、ウェイト合計が100%超えているとメッセージされる。
+
+電子稟議の新規起案で、領収書のようなファイル添付可能。
+
+
+ストレスチェックの集団分析で404になる。
+
+プロジェクト画面を追加。
+「プロジェクト管理」画面の追加
+プロジェクトの進行度をガントチャートで表示。
+作業項目の追加編集可能。
+プロジェクトの作業項目はチケット単位。
+プロジェクトの作業項目、工程表のテンプレートダウンロード可能で、アップロードで一括登録。
+
+ダッシュボードに自分のプロジェクトのガントチャートを表示
+
+
+出退勤管理
+勤怠一覧にて、出勤の横に出勤打刻時刻、退勤の横に退勤打刻時刻を表示（編集可能）
+退勤の打刻はいつでも打刻可能。
+24時でリセット。1日に1回まで出勤打刻可能。出勤打刻されると、退勤打刻をいつでも可能。
+
+
+社員登録に顧客登録可能
+社員登録にメールアドレス、電話番号は必須。
+
+資格登録
+社外の資格登録には、PDFまたはJPG、PNGなどの添付可能。
+
+#
+出退勤管理について
+
+出勤時刻と出勤打刻時刻は別。退勤時刻と退勤打刻時刻は別。
+出退勤管理では、4つとも並べて表示し、同様にダブルクリックで編集可能。
+出勤打刻は出社時刻を意味し、
+出勤時刻は勤務開始時刻、退勤打刻は出社時刻、退勤時刻は勤務終了時刻を意味する。
+#
+打刻時刻は秒単位、出社退勤は分単位で表示、
+プロジェクト欄の横幅を2倍ほど少し広げる
+打刻済みの扱いなのに、打刻時刻が表示されないバグ。
+CSVの一括アップロード、ダウンロードで打刻時間は不要。
+勤務開始、勤務終了を始業、就業に修正。
+
+
+日報作成画面で、AIアシスタント利用可能。
+イントラ記事作成も、AIアシスタント利用可能。
+
+電子稟議の新規起案時にファイル添付可能。（見積書など）
+
+チャット入力中にも、AIアシスタントの利用可能。
+
+
+資格登録で、画像やpdfなどの添付が可能。（資格証明書や領収書）
+
+プロジェクト管理画面では、
+プロジェクト一括登録可能。
+1列目：件番、2列目：プロジェクト名、3列目：管理者
+管理者は複数名指定可能。主管理者と従管理者を指定可能。
+プロジェクト一覧で、ダブルクリックで編集可能。
+開始期間および終了期間は不明、未定が入力可能。
+プロジェクト内の作業をチケット単位で追加可能。
+作業チケットで
+
+
+
+社員情報の追加で、ロールに顧客など全てのロールを選択可能
+
+#
+出勤打刻は一日一回押せる。
+その後は退勤打刻を何度でも押せる。24時にリセットされる。
+
+資格取得日の編集可能。
+認定証を添付と同様に領収書添付
+
+電子稟議の承認ボタンが反応しない。承認・却下には理由必須。
+
+左のサイドバーを以下でカテゴライズ。
+社員の機能、基本機能
+上司の機能、承認機能など
+管理部門（労務部）の機能
+管理部門（人事部）の機能
+管理部門（管理職）の機能
+管理部門（経理職）の機能
+システム管理機能
+
+ダッシュボードにカレンダー表示。
+カレンダーの休日はjpholidayから取得。
+microsoft,googleカレンダーの同期可能。
+
+
+月報作成で自己評価をつける。
+月報で提出済みの年月は選択不可。
+
+プロジェクト管理の主管理者は1人以上選択可能。
+
+
+ストレスチェックの作成は労務部機能。
+ストレスチェックの回答は社員の機能。
+ストレスチェックのデフォルト項目はtemplate/stress_check_template.mdに格納。
+ストレスチェックの作成はCSVでアップロード可能。
+
+
+
+#
+労務支援
+ハラスメント研修
+セキュリティ教育
+受講履歴管理
+その他法令順守の確認ため、集計
+
+template/company_rule.mdは就業規則。この就業規則に、1ページに表示、2ページ目に改定版数と改定日、
+ページ番号付与してpdfを作成
+
+
+
+
+以下の機能を実装して。
+ダッシュボードカレンダー + jpholiday + MS/Google同期（OAuth連携が必要）
+月報の自己評価フィールド追加（DBマイグレーション必要）
+プロジェクト主管理者の完全M2M化（再マイグレーション必要）
+
+
+健康診断の受診
+年1回義務
+
+
+
+
+
+社員情報の、社員追加画面で以下のエラー
+[HMR] connected
+forward-logs-shared.ts:95 [Fast Refresh] rebuilding
+:8000/api/v1/auth/me/:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)Understand this error
+:8000/api/v1/recruitment/jobs/:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)Understand this error
+forward-logs-shared.ts:95 [Fast Refresh] done in 7145ms
+forward-logs-shared.ts:95 [Fast Refresh] rebuilding
+forward-logs-shared.ts:95 [Fast Refresh] done in 2234ms
+forward-logs-shared.ts:95 [Fast Refresh] rebuilding
+forward-logs-shared.ts:95 [Fast Refresh] done in 1249ms
+Unable to add filesystem: <illegal path>Understand this error
+
+
+# ✅ 2026-04-24 コンプライアンスチェックリスト機能（フル実装）
+
+## 概要
+template/attention.md の労働管理チェックリスト（12セクション52項目）をDB管理し、ダッシュボードで進捗追跡可能に。
+
+## バックエンド実装
+
+### 新規アプリ: `apps/compliance/`
+
+**models.py**
+- `ComplianceChecklistSection`: 12セクション（健康診断、労働時間管理 など）
+- `ComplianceChecklistItem`: 52個の具体的チェックリスト項目
+- `ComplianceChecklistProgress`: ユーザーごとの完了状況（user + item で unique）
+- 全て SoftDeleteModel 継承
+
+**views.py - ComplianceChecklistViewSet**
+```
+GET    /api/v1/compliance/checklists/                  → セクション一覧 + 進捗率
+GET    /api/v1/compliance/checklists/{id}/             → セクション詳細 + 全項目
+GET    /api/v1/compliance/checklists/summary/          → 全体進捗サマリー
+POST   /api/v1/compliance/checklists/update_item_progress/
+       body: {item_id, is_completed, notes?}          → 項目完了状況更新
+```
+
+**serializers.py**
+- `ComplianceChecklistSectionListSerializer`: 一覧用（進捗率集計）
+- `ComplianceChecklistSectionDetailSerializer`: 詳細用（全項目含む）
+- `ComplianceChecklistProgressSerializer`: 項目進捗
+
+**migrations/**
+- `0001_initial.py`: テーブル作成（デフォルトで削除済み除外）
+- `0002_populate_checklist.py`: RunPython でデータ自動生成
+
+**設定**
+- settings.py: `'apps.compliance'` を INSTALLED_APPS に追加
+- urls.py: `/api/v1/compliance/` ルート追加
+
+### マイグレーション実行状況
+✅ PowerShell で実行完了
+```
+cd C:\Users\MiyauchiHitoshi\HRM\backend && .\manage.py migrate compliance
+```
+
+## フロントエンド実装
+
+### ダッシュボードウィジェット
+**`frontend/src/app/(main)/components/ComplianceChecklist.tsx`**
+
+**UI構造**
+```
+┌─ コンプライアンスチェックリスト
+│  ├─ 全体進捗: 75% [プログレスバー色分け: 緑≥70% / 黄40-70% / 赤<40%]
+│  ├─ 完了: 39/52 項目
+│  └─ セクション一覧
+│     ├─ 健康診断: 62% (5/8) [展開可能]
+│     │  └─ ☑ 年1回の定期健康診断を実施している
+│     │  └─ ☐ 対象者（週30時間以上等）を正しく抽出している
+│     │  └─ ... (全8項目)
+│     ├─ 労働時間管理: 83% (5/6)
+│     └─ ... (全12セクション)
+└─ ⚠️ 未完了25% - 定期的に確認してください
+```
+
+**機能**
+- セクション展開時に REST API で詳細項目を非同期取得
+- チェックボックスで項目完了/未完了を切り替え → 即座に進捗率再計算
+- 重要項目（リスクチェック セクション全4項目）に赤ラベル表示
+- 完了日時を自動記録
+
+**実装詳細**
+```typescript
+// 全体進捗取得
+useQuery({
+  queryKey: ['compliance-summary'],
+  queryFn: () => api.get('/api/v1/compliance/checklists/summary/'),
+})
+
+// セクション展開時に詳細取得
+const toggleSection = async (sectionId: string) => {
+  if (!sectionDetails[sectionId]) {
+    const response = await api.get(`/api/v1/compliance/checklists/${sectionId}/`)
+    setSectionDetails(prev => ({...prev, [sectionId]: response.data}))
+  }
+}
+
+// 項目完了状況を更新
+const updateItemMutation = useMutation({
+  mutationFn: (payload) => 
+    api.post('/api/v1/compliance/checklists/update_item_progress/', payload),
+  onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ['compliance-summary'] })
+    qc.invalidateQueries({ queryKey: ['compliance-checklists'] })
+  },
+})
+```
+
+**ダッシュボード統合**
+- `page.tsx` に `<ComplianceChecklist />` import & 配置
+- カレンダーとプロジェクトタスク間に表示（顧客には非表示）
+
+## データベーススキーマ
+
+```sql
+-- セクション（12個固定）
+CREATE TABLE compliance_checklistsection (
+  id UUID PRIMARY KEY,
+  title VARCHAR(100),
+  order SMALLINT,
+  is_deleted BOOLEAN DEFAULT FALSE,
+  ...timestamps...
+);
+
+-- 項目（52個）
+CREATE TABLE compliance_checklistitem (
+  id UUID PRIMARY KEY,
+  section_id UUID REFERENCES compliance_checklistsection,
+  title VARCHAR(200),
+  order SMALLINT,
+  is_critical BOOLEAN DEFAULT FALSE,    -- リスクチェック4項目のみTRUE
+  is_deleted BOOLEAN DEFAULT FALSE,
+  ...timestamps...
+);
+
+-- ユーザーごと進捗追跡
+CREATE TABLE compliance_checklistprogress (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES auth_user,
+  item_id UUID REFERENCES compliance_checklistitem,
+  is_completed BOOLEAN DEFAULT FALSE,
+  completed_at DATETIME NULL,          -- 完了日時
+  notes TEXT,                          -- 備考
+  is_deleted BOOLEAN DEFAULT FALSE,
+  UNIQUE(user_id, item_id),            -- ユーザー+項目は一意
+  ...timestamps...
+);
+```
+
+## テストシナリオ
+
+1. **初期表示**
+   - ダッシュボードにウィジェット表示 ✓
+   - 全体進捗 0% (未完了 0/52)
+
+2. **セクション展開**
+   - セクション展開 → API 呼び出し → 項目リスト表示 ✓
+   - 重要項目に赤ラベル ✓
+
+3. **項目完了**
+   - チェックボックス ON → POST /update_item_progress/ → 進捗率更新
+   - completed_at に現在時刻が記録される
+   - 関連セクションの進捗率 + 全体進捗率がリアルタイム更新
+
+4. **警告表示**
+   - 進捗率 < 80% → ⚠️ メッセージ表示
+
+## 拡張案（将来）
+
+1. **セクション別期限管理**: セクションに期限を付与 → カレンダー連携
+2. **部門別集計**: 部門/チーム単位の進捗ダッシュボード
+3. **PDF エクスポート**: 進捗状況をレポートとして出力
+4. **定期通知**: 月1回リマインダー通知
+5. **監査ログ**: 誰がいつ何を完了したかを詳細記録
+
+
+
+
+
+
+
+
 
