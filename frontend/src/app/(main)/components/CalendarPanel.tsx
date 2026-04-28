@@ -125,6 +125,14 @@ export default function CalendarPanel() {
     return day === 0 || day === 6
   }
 
+  const isSaturday = (date: Date) => {
+    return date.getDay() === 6
+  }
+
+  const isSunday = (date: Date) => {
+    return date.getDay() === 0
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
       <div className="flex items-center justify-between mb-6">
@@ -194,10 +202,15 @@ export default function CalendarPanel() {
             }
           }}
           dayCellDidMount={(info) => {
-            // 土日を赤色背景に設定
-            if (isWeekend(info.date)) {
+            // 土曜日を青色背景に、日曜日を赤色背景に設定
+            const dayText = info.el.querySelector('.fc-daygrid-day-number')
+            if (isSaturday(info.date)) {
+              info.el.classList.add('bg-blue-50')
+              if (dayText) {
+                dayText.classList.add('text-blue-600', 'font-semibold')
+              }
+            } else if (isSunday(info.date)) {
               info.el.classList.add('bg-red-50')
-              const dayText = info.el.querySelector('.fc-daygrid-day-number')
               if (dayText) {
                 dayText.classList.add('text-red-600', 'font-semibold')
               }
@@ -239,8 +252,12 @@ export default function CalendarPanel() {
           <span>日本の祝日</span>
         </div>
         <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded bg-blue-50 border border-blue-300" />
+          <span>土曜日</span>
+        </div>
+        <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded bg-red-50 border border-red-300" />
-          <span>土日</span>
+          <span>日曜日</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded bg-blue-500" />
