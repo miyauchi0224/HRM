@@ -104,10 +104,12 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         # User作成（仮パスワードを発行）
         import secrets
         temp_password = secrets.token_urlsafe(12)
+        roles = d.get('roles', [User.Role.EMPLOYEE])
         user = User.objects.create_user(
             email=d['email'],
             password=temp_password,
-            role=d['role'],
+            role=roles[0],  # 後方互換性のため最初のロール
+            roles=roles,
         )
         # Employee作成
         Employee.objects.create(

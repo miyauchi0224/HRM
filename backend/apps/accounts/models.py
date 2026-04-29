@@ -34,6 +34,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     email              = models.EmailField(unique=True)
     cognito_sub        = models.CharField(max_length=255, unique=True, blank=True, null=True)
     role               = models.CharField(max_length=20, choices=Role.choices, default=Role.EMPLOYEE)
+    roles              = models.JSONField(default=list, blank=True, verbose_name='ロール（複数）')
     class AIProvider(models.TextChoices):
         ANTHROPIC = 'anthropic', 'Anthropic (Claude)'
         OPENAI    = 'openai',    'OpenAI (ChatGPT)'
@@ -61,6 +62,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.email
 
+    def save(self, *args, **kwargs):
+        """roles と role を同期（roles が主、role は互換性のため）"""
+        if not self.roles and self.role:
+            self.roles = [self.role]
+        elif self.roles:
+            self.role = self.roles[0]
+        super().save(*args, **kwargs)
+
     # ===== ロール確認ヘルパー =====
 
     @property
@@ -69,10 +78,10 @@ class User(AbstractBaseUser, PermissionsMixin):
         上司レベル以上（直属部下の勤怠・休暇・MBOの参照・承認が可能）
         supervisor / manager / hr / accounting / admin が対象
         """
-        return self.role in (
+        return any(r in self.roles for r in (
             self.Role.SUPERVISOR, self.Role.MANAGER,
             self.Role.HR, self.Role.ACCOUNTING, self.Role.ADMIN,
-        )
+        ))
 
     @property
     def is_manager(self):
@@ -81,9 +90,9 @@ class User(AbstractBaseUser, PermissionsMixin):
         manager / hr / accounting / admin が対象
         ※ supervisor は部下のみ参照可のため含まない
         """
-        return self.role in (
+        return any(r in self.roles for r in (
             self.Role.MANAGER, self.Role.HR, self.Role.ACCOUNTING, self.Role.ADMIN,
-        )
+        ))
 
     @property
     def is_hr(self):
@@ -91,7 +100,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         人事以上（社員マスタ編集・給与等級・手当管理が可能）
         hr / admin が対象
         """
-        return self.role in (self.Role.HR, self.Role.ADMIN)
+        return any(r in self.roles for r in (self.Role.HR, self.Role.ADMIN))
 
     @property
     def is_accounting(self):
@@ -100,14 +109,14 @@ class User(AbstractBaseUser, PermissionsMixin):
         accounting / hr / admin が対象
         ※ 人事も給与関連を扱うため含む
         """
-        return self.role in (self.Role.ACCOUNTING, self.Role.HR, self.Role.ADMIN)
+        return any(r in self.roles for r in (self.Role.ACCOUNTING, self.Role.HR, self.Role.ADMIN))
 
     @property
     def is_admin(self):
         """システム管理者のみ（Django管理画面へのアクセス権）"""
-        return self.role == self.Role.ADMIN
+        return self.Role.ADMIN in self.roles
 
     @property
     def is_customer(self):
         """顧客（社内の勤怠・給与等を閲覧不可、イントラ公開記事・通知のみ）"""
-        return self.role == self.Role.CUSTOMER
+        return self.Role.CUSTOMER in self.roles

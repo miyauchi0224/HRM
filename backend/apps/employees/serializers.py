@@ -45,6 +45,7 @@ class EmployeeDetailSerializer(serializers.ModelSerializer):
     family_members     = FamilyMemberSerializer(many=True, read_only=True)
     email              = serializers.EmailField(source='user.email', read_only=True)
     role               = serializers.CharField(source='user.role', read_only=True)
+    roles              = serializers.ListField(source='user.roles', read_only=True)
     full_name          = serializers.CharField(read_only=True)
     is_active          = serializers.SerializerMethodField()
     avatar_url         = serializers.SerializerMethodField()
@@ -59,7 +60,7 @@ class EmployeeDetailSerializer(serializers.ModelSerializer):
             'zip_code', 'address', 'nearest_station',
             'workplace_name', 'workplace_address', 'workplace_phone', 'commute_route',
             'bank_name', 'bank_branch', 'bank_account_type', 'bank_account_number', 'bank_account_holder',
-            'email', 'role', 'is_active', 'avatar_url', 'emergency_contacts', 'family_members',
+            'email', 'role', 'roles', 'is_active', 'avatar_url', 'emergency_contacts', 'family_members',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'full_name', 'is_active', 'avatar_url', 'created_at', 'updated_at']
@@ -93,7 +94,11 @@ class CreateEmployeeSerializer(serializers.Serializer):
     grade           = serializers.IntegerField(default=1)
     employment_type = serializers.ChoiceField(choices=Employee.EmploymentType.choices,
                                               default=Employee.EmploymentType.FULL_TIME)
-    role            = serializers.ChoiceField(choices=User.Role.choices, default=User.Role.EMPLOYEE)
+    roles           = serializers.ListField(
+        child=serializers.ChoiceField(choices=User.Role.choices),
+        min_length=1,
+        default=list,
+    )
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
