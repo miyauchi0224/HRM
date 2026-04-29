@@ -778,45 +778,37 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
                 </select>
               </Field>
             )}
-            <Field label="姓 *"><Input k="last_name" placeholder="山田" /></Field>
-            <Field label="名 *"><Input k="first_name" placeholder="太郎" /></Field>
-            <Field label="姓（カナ）*"><Input k="last_name_kana" placeholder="ヤマダ" /></Field>
-            <Field label="名（カナ）*"><Input k="first_name_kana" placeholder="タロウ" /></Field>
-            {!isCustomer && (
-              <>
-                <Field label="生年月日 *"><Input k="birth_date" type="date" /></Field>
-                <Field label="性別">
-                  <select value={form.gender} onChange={(e) => set('gender', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                    {Object.entries(GENDER_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
-                </Field>
-              </>
-            )}
+            <Field label={`姓 ${isCustomer ? '' : '*'}`}><Input k="last_name" placeholder="山田" /></Field>
+            <Field label={`名 ${isCustomer ? '' : '*'}`}><Input k="first_name" placeholder="太郎" /></Field>
+            <Field label={`姓（カナ）${isCustomer ? '' : '*'}`}><Input k="last_name_kana" placeholder="ヤマダ" /></Field>
+            <Field label={`名（カナ）${isCustomer ? '' : '*'}`}><Input k="first_name_kana" placeholder="タロウ" /></Field>
+            <Field label={`生年月日 ${isCustomer ? '' : '*'}`}><Input k="birth_date" type="date" /></Field>
+            <Field label="性別">
+              <select value={form.gender} onChange={(e) => set('gender', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                {Object.entries(GENDER_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </Field>
           </div>
 
-          {/* 所属情報（顧客の場合は非表示） */}
-          {!isCustomer && (
-            <>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-2">所属</p>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="部署 *"><Input k="department" placeholder="開発部" /></Field>
-                <Field label="役職 *">
-                  <select value={form.position} onChange={(e) => set('position', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                    <option value="">選択してください</option>
-                    {POSITION_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </Field>
-                <Field label="等級">
-                  <input type="number" min={1} max={10} value={form.grade}
-                    onChange={(e) => set('grade', Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                </Field>
-                <Field label="入社日 *"><Input k="hire_date" type="date" /></Field>
-              </div>
-            </>
-          )}
+          {/* 所属情報 */}
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-2">所属</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={`部署 ${isCustomer ? '' : '*'}`}><Input k="department" placeholder="開発部" /></Field>
+            <Field label={`役職 ${isCustomer ? '' : '*'}`}>
+              <select value={form.position} onChange={(e) => set('position', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <option value="">選択してください</option>
+                {POSITION_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </Field>
+            <Field label="等級">
+              <input type="number" min={1} max={10} value={form.grade}
+                onChange={(e) => set('grade', Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </Field>
+            <Field label={`入社日 ${isCustomer ? '' : '*'}`}><Input k="hire_date" type="date" /></Field>
+          </div>
         </div>
 
         <div className="flex gap-3 p-6 border-t border-gray-100">
