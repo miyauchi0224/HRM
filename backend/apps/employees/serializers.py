@@ -85,20 +85,44 @@ class CreateEmployeeSerializer(serializers.Serializer):
     first_name      = serializers.CharField(max_length=50)
     last_name_kana  = serializers.CharField(max_length=50)
     first_name_kana = serializers.CharField(max_length=50)
-    birth_date      = serializers.DateField()
-    gender          = serializers.ChoiceField(choices=Employee.Gender.choices)
-    hire_date       = serializers.DateField()
-    department      = serializers.CharField(max_length=100)
-    position        = serializers.CharField(max_length=100)
-    phone           = serializers.CharField(max_length=20)
-    grade           = serializers.IntegerField(default=1)
+    birth_date      = serializers.DateField(required=False, allow_null=True)
+    gender          = serializers.ChoiceField(choices=Employee.Gender.choices, required=False, allow_null=True)
+    hire_date       = serializers.DateField(required=False, allow_null=True)
+    department      = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    position        = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    phone           = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    grade           = serializers.IntegerField(default=1, required=False)
     employment_type = serializers.ChoiceField(choices=Employee.EmploymentType.choices,
-                                              default=Employee.EmploymentType.FULL_TIME)
+                                              default=Employee.EmploymentType.FULL_TIME,
+                                              required=False)
     roles           = serializers.ListField(
         child=serializers.ChoiceField(choices=User.Role.choices),
         min_length=1,
         default=list,
     )
+
+    def validate(self, data):
+        roles = data.get('roles', [])
+        is_customer = User.Role.CUSTOMER in roles
+
+        # 顧客以外は必須フィールドをチェック
+        if not is_customer:
+            required_fields = {
+                'birth_date': '生年月日',
+                'gender': '性別',
+                'hire_date': '入社日',
+                'department': '部門',
+                'position': '職位',
+                'phone': '電話番号',
+            }
+            errors = {}
+            for field, label in required_fields.items():
+                if not data.get(field):
+                    errors[field] = f'{label}は必須です'
+            if errors:
+                raise serializers.ValidationError(errors)
+
+        return data
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():

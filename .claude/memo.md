@@ -1109,5 +1109,8 @@ POST  /api/v1/calendar/oauth/revoke/           → 連携解除
 
 
 
+社員は社員追加可能。有効化には上司の承認が必要。
+
+
 
 

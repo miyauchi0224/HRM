@@ -25,6 +25,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         EMPLOYEE   = 'employee',   '社員'
         MANAGER    = 'manager',    '管理職'
         HR         = 'hr',         '人事'
+        LABOR      = 'labor',      '労務'
         ACCOUNTING = 'accounting', '経理'
         CUSTOMER   = 'customer',   '顧客'
         ADMIN      = 'admin',      'システム管理者'
