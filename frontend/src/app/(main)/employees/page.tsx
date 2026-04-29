@@ -55,7 +55,6 @@ const POSITION_OPTIONS = [
 const GENDER_LABEL: Record<string, string> = { male: '男性', female: '女性', other: 'その他' }
 const ROLE_OPTIONS = [
   { value: 'employee',   label: '社員' },
-  { value: 'supervisor', label: '上司' },
   { value: 'manager',    label: '管理職' },
   { value: 'hr',         label: '人事' },
   { value: 'accounting', label: '経理' },
