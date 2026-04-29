@@ -619,9 +619,10 @@ class CalendarViewSet(viewsets.ViewSet):
             return self._export_csv(events)
 
     def _export_csv(self, events):
-        """CSV形式でエクスポート"""
+        """CSV形式でエクスポート（UTF-8 BOM付き）"""
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
         response['Content-Disposition'] = 'attachment; filename="calendar_events.csv"'
+        response.write('﻿')  # UTF-8 BOM
 
         writer = csv.writer(response)
         writer.writerow(['タイトル', '開始日時', '終了日時', 'プロバイダー', '作成日'])
