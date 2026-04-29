@@ -6,7 +6,6 @@ import { useAuthStore } from '@/lib/store'
 import { Clock, Calendar, Target, Bell, CheckSquare, Newspaper, Pin, Play, Square, GanttChartSquare } from 'lucide-react'
 import Link from 'next/link'
 import CalendarPanel from './components/CalendarPanel'
-import ComplianceChecklist from './components/ComplianceChecklist'
 
 export default function DashboardPage() {
   const user       = useAuthStore((s) => s.user)
@@ -164,9 +163,6 @@ export default function DashboardPage() {
 
       {/* カレンダー */}
       {!isCustomer && <CalendarPanel />}
-
-      {/* コンプライアンスチェックリスト */}
-      {!isCustomer && <ComplianceChecklist />}
 
       {/* プロジェクトタスク（自分のガントチャート） */}
       {!isCustomer && myTasks.length > 0 && (

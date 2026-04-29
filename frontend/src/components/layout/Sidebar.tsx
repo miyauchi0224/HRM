@@ -96,6 +96,7 @@ export default function Sidebar() {
           <>
             <SectionLabel>管理部門（労務部）</SectionLabel>
             <NavLink href="/attendance"   label="36協定状況"       icon={ShieldAlert}  active={active('/attendance')} />
+            <NavLink href="/compliance"   label="コンプライアンス" icon={CheckSquare}  active={active('/compliance')} />
           </>
         )}
 
