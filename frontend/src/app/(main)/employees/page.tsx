@@ -731,8 +731,12 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
               <select value={form.role} onChange={(e) => set('role', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 <option value="employee">社員</option>
+                <option value="supervisor">上司</option>
                 <option value="manager">管理職</option>
                 <option value="hr">人事</option>
+                <option value="accounting">経理</option>
+                <option value="customer">顧客</option>
+                <option value="admin">システム管理者</option>
               </select>
             </Field>
           </div>

@@ -1,11 +1,10 @@
 'use client'
 import { useState, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { Bot, MessageSquare, Target, FileText, Receipt, Send, Loader2 } from 'lucide-react'
+import { Bot, MessageSquare, Target, FileText, Receipt, Send, Loader2, Newspaper, Briefcase } from 'lucide-react'
 
-type Tab = 'hr-chat' | 'mbo-goal' | 'daily-report' | 'receipt'
+type Tab = 'hr-chat' | 'mbo-goal' | 'daily-report' | 'receipt' | 'intra-article' | 'job-posting'
 
 export default function AIAssistantPage() {
   const user = useAuthStore((s) => s.user)
@@ -14,9 +13,11 @@ export default function AIAssistantPage() {
 
   const tabs = [
     ...(isHR ? [{ key: 'hr-chat' as Tab, label: 'HRチャット', icon: MessageSquare }] : []),
-    { key: 'mbo-goal'      as Tab, label: 'MBO目標下書き', icon: Target },
-    { key: 'daily-report'  as Tab, label: '日報下書き',    icon: FileText },
-    { key: 'receipt'       as Tab, label: '領収書OCR',     icon: Receipt },
+    { key: 'mbo-goal'       as Tab, label: 'MBO目標下書き',   icon: Target },
+    { key: 'daily-report'   as Tab, label: '日報下書き',       icon: FileText },
+    { key: 'intra-article'  as Tab, label: 'イントラ記事',     icon: Newspaper },
+    ...(isHR ? [{ key: 'job-posting' as Tab, label: '求人票',  icon: Briefcase }] : []),
+    { key: 'receipt'        as Tab, label: '領収書OCR',        icon: Receipt },
   ]
 
   return (
@@ -29,7 +30,7 @@ export default function AIAssistantPage() {
         </div>
       </div>
 
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
+      <div className="flex flex-wrap gap-1 mb-6 border-b border-gray-200">
         {tabs.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -46,10 +47,12 @@ export default function AIAssistantPage() {
         ))}
       </div>
 
-      {activeTab === 'hr-chat'     && <HRChatPanel />}
-      {activeTab === 'mbo-goal'    && <MBOGoalPanel />}
-      {activeTab === 'daily-report'&& <DailyReportPanel />}
-      {activeTab === 'receipt'     && <ReceiptPanel />}
+      {activeTab === 'hr-chat'      && <HRChatPanel />}
+      {activeTab === 'mbo-goal'     && <MBOGoalPanel />}
+      {activeTab === 'daily-report' && <DailyReportPanel />}
+      {activeTab === 'intra-article'&& <IntraArticlePanel />}
+      {activeTab === 'job-posting'  && <JobPostingPanel />}
+      {activeTab === 'receipt'      && <ReceiptPanel />}
     </div>
   )
 }
@@ -242,6 +245,150 @@ function DailyReportPanel() {
       {draft && (
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <p className="text-xs text-gray-400 mb-2">生成された日報（コピーしてご使用ください）</p>
+          <p className="text-sm text-gray-800 whitespace-pre-wrap">{draft}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ===== イントラ記事下書きパネル =====
+function IntraArticlePanel() {
+  const [title,   setTitle]   = useState('')
+  const [summary, setSummary] = useState('')
+  const [draft,   setDraft]   = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState('')
+
+  const submit = async () => {
+    if (!title.trim()) return
+    setLoading(true); setError(''); setDraft('')
+    try {
+      const res = await api.post('/api/v1/ai/draft-intra-article/', { title, summary })
+      setDraft(res.data.draft)
+    } catch (e: any) {
+      setError(e.response?.data?.error ?? 'エラーが発生しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            記事タイトル <span className="text-red-500">*</span>
+          </label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="例: 2025年度 夏季休暇のご案内"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">概要・伝えたいポイント</label>
+          <textarea
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+            placeholder={'・休暇期間: 8/13〜8/16\n・緊急連絡先の周知\n・業務引き継ぎについて'}
+            rows={4}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          />
+        </div>
+        <button
+          onClick={submit}
+          disabled={loading || !title.trim()}
+          className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-2.5 rounded-lg text-sm font-medium"
+        >
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <Newspaper size={16} />}
+          記事本文を生成
+        </button>
+      </div>
+
+      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>}
+      {draft && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-400 mb-2">生成された記事本文（編集してご使用ください）</p>
+          <p className="text-sm text-gray-800 whitespace-pre-wrap">{draft}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ===== 求人票下書きパネル =====
+function JobPostingPanel() {
+  const [jobTitle,    setJobTitle]    = useState('')
+  const [department,  setDepartment]  = useState('')
+  const [focus,       setFocus]       = useState('')
+  const [draft,       setDraft]       = useState('')
+  const [loading,     setLoading]     = useState(false)
+  const [error,       setError]       = useState('')
+
+  const submit = async () => {
+    if (!jobTitle.trim()) return
+    setLoading(true); setError(''); setDraft('')
+    try {
+      const res = await api.post('/api/v1/ai/draft-job-posting/', {
+        job_title: jobTitle, department, focus,
+      })
+      setDraft(res.data.draft)
+    } catch (e: any) {
+      setError(e.response?.data?.error ?? 'エラーが発生しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            職種名 <span className="text-red-500">*</span>
+          </label>
+          <input
+            value={jobTitle}
+            onChange={(e) => setJobTitle(e.target.value)}
+            placeholder="例: バックエンドエンジニア"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">部署・チーム</label>
+          <input
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+            placeholder="例: 開発部 プラットフォームチーム"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">重視する点・スキル</label>
+          <textarea
+            value={focus}
+            onChange={(e) => setFocus(e.target.value)}
+            placeholder={'例: Python/Django の実務経験、チームでのコード設計経験、コミュニケーション能力'}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          />
+        </div>
+        <button
+          onClick={submit}
+          disabled={loading || !jobTitle.trim()}
+          className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-2.5 rounded-lg text-sm font-medium"
+        >
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <Briefcase size={16} />}
+          求人票を生成
+        </button>
+      </div>
+
+      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>}
+      {draft && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-xs text-gray-400 mb-2">生成された求人票（編集してご使用ください）</p>
           <p className="text-sm text-gray-800 whitespace-pre-wrap">{draft}</p>
         </div>
       )}

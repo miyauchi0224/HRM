@@ -6,8 +6,8 @@ class MBOReportSerializer(serializers.ModelSerializer):
     class Meta:
         model  = MBOReport
         fields = [
-            'id', 'goal', 'month', 'action_content', 'result',
-            'manager_comment', 'ai_suggestion', 'status',
+            'id', 'goal', 'month', 'action_content', 'result', 'next_month_issue',
+            'self_score', 'manager_comment', 'ai_suggestion', 'status',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'manager_comment', 'ai_suggestion', 'created_at', 'updated_at']

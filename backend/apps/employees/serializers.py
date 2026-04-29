@@ -89,6 +89,7 @@ class CreateEmployeeSerializer(serializers.Serializer):
     hire_date       = serializers.DateField()
     department      = serializers.CharField(max_length=100)
     position        = serializers.CharField(max_length=100)
+    phone           = serializers.CharField(max_length=20)
     grade           = serializers.IntegerField(default=1)
     employment_type = serializers.ChoiceField(choices=Employee.EmploymentType.choices,
                                               default=Employee.EmploymentType.FULL_TIME)

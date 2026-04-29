@@ -21,9 +21,11 @@ class DocumentCategory(SoftDeleteModel):
 
 class Document(SoftDeleteModel):
     class Visibility(models.TextChoices):
-        ALL      = 'all',      '全社員'
-        HR_ONLY  = 'hr_only',  '人事のみ'
-        PERSONAL = 'personal', '個人'
+        ALL          = 'all',          '全社員'
+        HR_ONLY      = 'hr_only',      '人事のみ'
+        PERSONAL     = 'personal',     '個人'
+        ROLE_MANAGER = 'role_manager', '管理職以上'
+        PROJECT      = 'project',      'プロジェクトメンバー'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=300, verbose_name='タイトル')
@@ -34,6 +36,10 @@ class Document(SoftDeleteModel):
     target_employee = models.ForeignKey(
         Employee, on_delete=models.CASCADE, null=True, blank=True,
         related_name='personal_documents', verbose_name='対象社員'
+    )
+    target_project = models.ForeignKey(
+        'attendance.Project', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='documents', verbose_name='対象プロジェクト'
     )
     visibility = models.CharField(
         max_length=20, choices=Visibility.choices, default=Visibility.ALL

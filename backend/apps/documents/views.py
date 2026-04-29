@@ -33,7 +33,7 @@ class DocumentViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         qs = Document.objects.select_related(
-            'category', 'target_employee', 'created_by'
+            'category', 'target_employee', 'created_by', 'target_project'
         ).prefetch_related('files')
 
         if user.is_hr:
@@ -41,10 +41,32 @@ class DocumentViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
 
         employee = getattr(user, 'employee', None)
         from django.db.models import Q
-        return qs.filter(
+        from apps.attendance.models import AttendanceRecord
+
+        # 社員が所属するプロジェクトIDを取得
+        project_ids = []
+        if employee:
+            project_ids = list(
+                AttendanceRecord.objects.filter(employee=employee)
+                .values_list('project_id', flat=True)
+                .distinct()
+            )
+
+        # 管理職かどうか判定（is_manager フラグ or role が manager/hr/admin）
+        is_manager = getattr(user, 'is_manager', False) or (
+            hasattr(user, 'role') and user.role in ('manager', 'hr', 'admin')
+        )
+
+        q = (
             Q(visibility='all') |
             Q(visibility='personal', target_employee=employee)
         )
+        if is_manager:
+            q |= Q(visibility='role_manager')
+        if project_ids:
+            q |= Q(visibility='project', target_project_id__in=project_ids)
+
+        return qs.filter(q)
 
     def get_permissions(self):
         if self.action in ('create', 'destroy'):

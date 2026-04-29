@@ -74,7 +74,7 @@ class MBOGoalViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         total    = self._total_weight(employee, d['year'], d['period'])
         if total + d['weight'] > 100:
             return Response(
-                {'error': f'ウェイト合計が100%を超えます（現在：{total}%）'},
+                {'error': f'ウェイトの合計が100%を超えます。既存目標の合計: {total}%、追加後: {total + d["weight"]}%。ウェイトの配分を見直してください。'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         self.perform_create(serializer)

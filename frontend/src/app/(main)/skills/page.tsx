@@ -1,8 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
-import { Award, Plus, AlertTriangle } from 'lucide-react'
+import { Award, Plus, AlertTriangle, Upload, Download, X, Image as ImageIcon } from 'lucide-react'
 
 interface Skill {
   id: string
@@ -14,6 +14,8 @@ interface Skill {
   certified_date: string | null
   expiry_date: string | null
   note: string
+  certificate_file: string | null
+  certificate_url: string | null
 }
 
 const CATEGORY_OPTIONS = [
@@ -33,6 +35,8 @@ function daysUntil(dateStr: string | null): number | null {
 
 export default function SkillsPage() {
   const [showNew, setShowNew] = useState(false)
+  const [certUploading, setCertUploading] = useState<string | null>(null)
+  const certRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const qc = useQueryClient()
 
   const { data: skills = [], isLoading } = useQuery<Skill[]>({
@@ -44,6 +48,32 @@ export default function SkillsPage() {
     mutationFn: (id: string) => api.delete(`/api/v1/skills/${id}/`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['skills'] }),
   })
+
+  const uploadCertificate = async (skillId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCertUploading(skillId)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      await api.post(`/api/v1/skills/${skillId}/upload-certificate/`, form)
+      qc.invalidateQueries({ queryKey: ['skills'] })
+    } catch {
+      alert('認定証のアップロードに失敗しました')
+    } finally {
+      setCertUploading(null)
+      const ref = certRefs.current[skillId]
+      if (ref) ref.value = ''
+    }
+  }
+
+  const downloadCertificate = async (skillId: string, skillName: string) => {
+    const res = await api.get(`/api/v1/skills/${skillId}/download-certificate/`, { responseType: 'blob' })
+    const a = document.createElement('a')
+    a.href = window.URL.createObjectURL(new Blob([res.data]))
+    a.download = `${skillName}_certificate`
+    a.click()
+  }
 
   const expiringSoon = skills.filter((s) => {
     const d = daysUntil(s.expiry_date)
@@ -135,9 +165,69 @@ export default function SkillsPage() {
                   )}
                   {s.note && <p className="truncate">備考: {s.note}</p>}
                 </div>
+                {/* 認定証ファイル */}
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  {s.certificate_url ? (
+                    <div className="flex items-center gap-2">
+                      {s.certificate_file && /\.(jpg|jpeg|png|gif|webp)$/i.test(s.certificate_file) ? (
+                        <a href={s.certificate_url} target="_blank" rel="noopener noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={s.certificate_url}
+                            alt="認定証"
+                            className="w-16 h-16 object-cover rounded border border-gray-200 cursor-pointer hover:opacity-80"
+                          />
+                        </a>
+                      ) : (
+                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                          <ImageIcon size={13} className="text-gray-400" />
+                          <span>認定証あり</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => downloadCertificate(s.id, s.skill_name)}
+                        className="text-xs flex items-center gap-1 text-blue-500 hover:text-blue-700"
+                      >
+                        <Download size={12} /> DL
+                      </button>
+                      <label className={`text-xs flex items-center gap-1 cursor-pointer ${
+                        certUploading === s.id ? 'text-gray-400 cursor-not-allowed' : 'text-gray-400 hover:text-blue-500'
+                      }`} title="認定証を更新">
+                        <Upload size={12} />
+                        {certUploading === s.id ? '...' : '更新'}
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*,.pdf"
+                          disabled={certUploading === s.id}
+                          ref={(el) => { certRefs.current[s.id] = el }}
+                          onChange={(e) => uploadCertificate(s.id, e)}
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <label className={`flex items-center gap-1 text-xs cursor-pointer w-fit ${
+                      certUploading === s.id
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-blue-500 hover:text-blue-700'
+                    }`}>
+                      <Upload size={12} />
+                      {certUploading === s.id ? 'アップロード中...' : '認定証を添付'}
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*,.pdf"
+                        disabled={certUploading === s.id}
+                        ref={(el) => { certRefs.current[s.id] = el }}
+                        onChange={(e) => uploadCertificate(s.id, e)}
+                      />
+                    </label>
+                  )}
+                </div>
+
                 <button
                   onClick={() => confirm('削除しますか？') && deleteMut.mutate(s.id)}
-                  className="mt-3 text-xs text-gray-300 hover:text-red-400 transition-colors"
+                  className="mt-2 text-xs text-gray-300 hover:text-red-400 transition-colors"
                 >
                   削除
                 </button>

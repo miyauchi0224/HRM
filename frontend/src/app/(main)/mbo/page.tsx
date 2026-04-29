@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { Target, Plus, ChevronDown, ChevronRight, Send, Star, CheckCircle, Pencil } from 'lucide-react'
+import { Target, Plus, ChevronDown, ChevronRight, Send, Star, CheckCircle, Pencil, Sparkles } from 'lucide-react'
 
 // ===== 型定義 =====
 interface MBOGoal {
@@ -26,6 +26,8 @@ interface MBOReport {
   month: string
   action_content: string
   result: string
+  next_month_issue: string
+  self_score: number | null
   manager_comment: string
   ai_suggestion: string
   status: 'draft' | 'submitted' | 'commented'
@@ -379,7 +381,11 @@ function GoalCard({ goal, isManager, totalWeight, onUpdate }: { goal: MBOGoal; i
             )}
             {/* 承認済みまたは評価済みの場合のみ月報追加可能 */}
             {(goal.status === 'approved' || goal.status === 'evaluated') ? (
-              <NewReportForm goalId={goal.id} onSaved={onUpdate} />
+              <NewReportForm
+                goalId={goal.id}
+                onSaved={onUpdate}
+                submittedMonths={goal.reports.filter(r => r.status !== 'draft').map(r => r.month.slice(0, 7))}
+              />
             ) : (
               goal.status !== 'draft' && (
                 <p className="mt-3 text-xs text-gray-400">
@@ -396,13 +402,16 @@ function GoalCard({ goal, isManager, totalWeight, onUpdate }: { goal: MBOGoal; i
 
 // ===== 月間報告カード =====
 function ReportCard({ report, onUpdate }: { report: MBOReport; onUpdate: () => void }) {
-  const [editing, setEditing]     = useState(false)
-  const [action, setAction]       = useState(report.action_content)
-  const [result, setResult]       = useState(report.result)
-  const [saving, setSaving]       = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiText, setAiText]       = useState(report.ai_suggestion)
+  const [editing, setEditing]         = useState(false)
+  const [action, setAction]           = useState(report.action_content)
+  const [result, setResult]           = useState(report.result)
+  const [nextIssue, setNextIssue]     = useState(report.next_month_issue)
+  const [selfScore, setSelfScore]     = useState(report.self_score?.toString() ?? '')
+  const [saving, setSaving]           = useState(false)
+  const [submitting, setSubmitting]   = useState(false)
+  const [aiLoading, setAiLoading]     = useState(false)
+  const [aiText, setAiText]           = useState(report.ai_suggestion)
+  const [nextIssueAiLoading, setNextIssueAiLoading] = useState(false)
 
   const submitReport = async () => {
     setSubmitting(true)
@@ -419,7 +428,12 @@ function ReportCard({ report, onUpdate }: { report: MBOReport; onUpdate: () => v
   const save = async () => {
     setSaving(true)
     try {
-      await api.patch(`/api/v1/mbo/reports/${report.id}/`, { action_content: action, result })
+      await api.patch(`/api/v1/mbo/reports/${report.id}/`, {
+        action_content: action,
+        result,
+        next_month_issue: nextIssue,
+        self_score: selfScore ? parseFloat(selfScore) : null
+      })
       setEditing(false)
       onUpdate()
     } finally {
@@ -436,6 +450,18 @@ function ReportCard({ report, onUpdate }: { report: MBOReport; onUpdate: () => v
       alert('AI提案の取得に失敗しました')
     } finally {
       setAiLoading(false)
+    }
+  }
+
+  const suggestNextIssue = async () => {
+    setNextIssueAiLoading(true)
+    try {
+      const res = await api.post('/api/v1/ai/draft-next-month-issue/', { result, goal: '' })
+      setNextIssue(res.data.draft ?? '')
+    } catch {
+      alert('AI提案の取得に失敗しました')
+    } finally {
+      setNextIssueAiLoading(false)
     }
   }
 
@@ -475,6 +501,42 @@ function ReportCard({ report, onUpdate }: { report: MBOReport; onUpdate: () => v
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
             />
           </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-gray-500">次月の課題</label>
+              <button
+                type="button"
+                onClick={suggestNextIssue}
+                disabled={nextIssueAiLoading || !result.trim()}
+                className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 disabled:text-gray-400 disabled:cursor-not-allowed"
+              >
+                {nextIssueAiLoading
+                  ? <><span className="animate-spin inline-block">⟳</span> AI提案中...</>
+                  : <><Sparkles size={12} /> AI提案</>
+                }
+              </button>
+            </div>
+            <textarea
+              value={nextIssue}
+              onChange={(e) => setNextIssue(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+              placeholder="次月に取り組む課題・改善点を記入（AI提案ボタンで自動入力）"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">自己評価（0〜5）</label>
+            <input
+              type="number"
+              min={0}
+              max={5}
+              step={0.5}
+              value={selfScore}
+              onChange={(e) => setSelfScore(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              placeholder="例: 4.0"
+            />
+          </div>
           <div className="flex gap-2">
             <button
               onClick={save}
@@ -503,6 +565,21 @@ function ReportCard({ report, onUpdate }: { report: MBOReport; onUpdate: () => v
             <div>
               <p className="text-xs text-gray-400">結果・考察</p>
               <p className="text-gray-700 whitespace-pre-wrap">{report.result}</p>
+            </div>
+          )}
+          {report.self_score !== null && (
+            <div>
+              <p className="text-xs text-gray-400">自己評価</p>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">{report.self_score}</span>
+                <span className="text-xs text-gray-500">/ 5.0</span>
+              </div>
+            </div>
+          )}
+          {report.next_month_issue && (
+            <div>
+              <p className="text-xs text-gray-400">次月の課題</p>
+              <p className="text-gray-700 whitespace-pre-wrap">{report.next_month_issue}</p>
             </div>
           )}
 
@@ -553,12 +630,15 @@ function ReportCard({ report, onUpdate }: { report: MBOReport; onUpdate: () => v
 }
 
 // ===== 月間報告 新規フォーム =====
-function NewReportForm({ goalId, onSaved }: { goalId: string; onSaved: () => void }) {
-  const [open, setOpen]       = useState(false)
-  const [month, setMonth]     = useState(new Date().toISOString().slice(0, 7))
-  const [action, setAction]   = useState('')
-  const [result, setResult]   = useState('')
-  const [saving, setSaving]   = useState(false)
+function NewReportForm({ goalId, onSaved, submittedMonths = [] }: { goalId: string; onSaved: () => void; submittedMonths?: string[] }) {
+  const [open, setOpen]           = useState(false)
+  const [month, setMonth]         = useState(new Date().toISOString().slice(0, 7))
+  const [action, setAction]       = useState('')
+  const [result, setResult]       = useState('')
+  const [nextIssue, setNextIssue] = useState('')
+  const [selfScore, setSelfScore] = useState('')
+  const [saving, setSaving]       = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
 
   const save = async () => {
     setSaving(true)
@@ -568,15 +648,31 @@ function NewReportForm({ goalId, onSaved }: { goalId: string; onSaved: () => voi
         month: `${month}-01`,
         action_content: action,
         result,
+        next_month_issue: nextIssue,
+        self_score: selfScore ? parseFloat(selfScore) : null,
       })
       setOpen(false)
       setAction('')
       setResult('')
+      setNextIssue('')
+      setSelfScore('')
       onSaved()
     } catch (e: any) {
       alert(e.response?.data?.non_field_errors?.[0] ?? '登録に失敗しました')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const suggestNextIssue = async () => {
+    setAiLoading(true)
+    try {
+      const res = await api.post('/api/v1/ai/draft-next-month-issue/', { result, goal: '' })
+      setNextIssue(res.data.draft ?? '')
+    } catch {
+      alert('AI提案の取得に失敗しました')
+    } finally {
+      setAiLoading(false)
     }
   }
 
@@ -600,8 +696,11 @@ function NewReportForm({ goalId, onSaved }: { goalId: string; onSaved: () => voi
           type="month"
           value={month}
           onChange={(e) => setMonth(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          className={`px-3 py-2 border rounded-lg text-sm ${submittedMonths.includes(month) ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
         />
+        {submittedMonths.includes(month) && (
+          <p className="text-xs text-red-500 mt-1">この月は既に提出済みです。別の月を選択してください。</p>
+        )}
       </div>
       <div>
         <label className="text-xs text-gray-500 block mb-1">行動内容</label>
@@ -623,11 +722,47 @@ function NewReportForm({ goalId, onSaved }: { goalId: string; onSaved: () => voi
           placeholder="結果と振り返りを記入してください"
         />
       </div>
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs text-gray-500">次月の課題</label>
+          <button
+            type="button"
+            onClick={suggestNextIssue}
+            disabled={aiLoading || !result.trim()}
+            className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 disabled:text-gray-400 disabled:cursor-not-allowed"
+          >
+            {aiLoading
+              ? <><span className="animate-spin inline-block">⟳</span> AI提案中...</>
+              : <><Sparkles size={12} /> AI提案</>
+            }
+          </button>
+        </div>
+        <textarea
+          value={nextIssue}
+          onChange={(e) => setNextIssue(e.target.value)}
+          rows={3}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+          placeholder="次月に取り組む課題・改善点を記入してください（AI提案ボタンで自動入力）"
+        />
+      </div>
+      <div>
+        <label className="text-xs text-gray-500 block mb-1">自己評価（0〜5）</label>
+        <input
+          type="number"
+          min={0}
+          max={5}
+          step={0.5}
+          value={selfScore}
+          onChange={(e) => setSelfScore(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          placeholder="例: 4.0"
+        />
+      </div>
       <div className="flex gap-2">
         <button
           onClick={save}
-          disabled={saving}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium"
+          disabled={saving || submittedMonths.includes(month)}
+          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xs rounded-lg font-medium"
         >
           {saving ? '登録中...' : '登録'}
         </button>

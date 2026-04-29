@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import api from '@/lib/api'
-import { ArrowLeft, Save, Send, ImagePlus, Eye, Edit3 } from 'lucide-react'
+import { ArrowLeft, Save, Send, ImagePlus, Eye, Edit3, Sparkles, Loader2 } from 'lucide-react'
 
 // TipTap は DOM 操作を含むため SSR を無効にして動的インポート
 const RichTextEditor = dynamic(
@@ -57,7 +57,22 @@ export default function IntraNewPage() {
   const [format, setFormat]     = useState<Format>('markdown')
   const [category, setCategory] = useState('announcement')
   const [mdPreview, setMdPreview] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const requestAI = async () => {
+    if (!title.trim()) { alert('タイトルを先に入力してください'); return }
+    setAiLoading(true)
+    try {
+      const res = await api.post('/api/v1/ai/draft-intra-article/', {
+        title,
+        summary: content || 'なし',
+      })
+      setContent(res.data.draft)
+    } catch { /* silent */ } finally {
+      setAiLoading(false)
+    }
+  }
 
   // Markdownエディタ用：画像アップロードして URL をカーソル位置に挿入
   const [uploading, setUploading] = useState(false)
@@ -141,8 +156,8 @@ export default function IntraNewPage() {
         </select>
       </div>
 
-      {/* 形式セレクタ */}
-      <div className="flex gap-2 mb-3 shrink-0">
+      {/* 形式セレクタ + AI生成 */}
+      <div className="flex items-center gap-2 mb-3 shrink-0">
         {FORMAT_OPTIONS.map((f) => (
           <button
             key={f.value}
@@ -157,6 +172,15 @@ export default function IntraNewPage() {
             <span className="ml-1.5 text-xs opacity-60">{f.desc}</span>
           </button>
         ))}
+        <button
+          onClick={requestAI}
+          disabled={aiLoading || !title.trim()}
+          className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-purple-700 hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white border border-purple-600 transition-colors"
+          title="タイトルと概要からAIが本文を作成します"
+        >
+          {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+          AI本文生成
+        </button>
       </div>
 
       {/* ── テキスト形式 ── */}

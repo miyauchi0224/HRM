@@ -22,7 +22,12 @@ class Skill(SoftDeleteModel):
     organizer      = models.CharField(max_length=100, blank=True, verbose_name='主催者・発行機関')
     certified_date = models.DateField(null=True, blank=True, verbose_name='取得日')
     expiry_date    = models.DateField(null=True, blank=True, verbose_name='有効期限')
-    note           = models.TextField(blank=True, verbose_name='備考')
+    note             = models.TextField(blank=True, verbose_name='備考')
+    certificate_file = models.FileField(
+        upload_to='skills/certificates/%Y/%m/',
+        null=True, blank=True,
+        verbose_name='認定証ファイル'
+    )
 
     class Meta:
         verbose_name = 'スキル'

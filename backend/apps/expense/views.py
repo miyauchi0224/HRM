@@ -8,11 +8,11 @@ from rest_framework.permissions import IsAuthenticated
 from apps.accounts.permissions import IsNotCustomer, IsAccounting
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse
 from django.utils import timezone
 
-from .models import AccountItem, ExpenseRequest
-from .serializers import AccountItemSerializer, ExpenseRequestSerializer
+from .models import AccountItem, ExpenseRequest, ExpenseAttachment
+from .serializers import AccountItemSerializer, ExpenseRequestSerializer, ExpenseAttachmentSerializer
 from apps.notifications.models import Notification
 from apps.employees.models import Employee
 from apps.common.mixins import SoftDeleteViewSetMixin
@@ -285,3 +285,54 @@ class ExpenseRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             'errors':  len(errors),
             'error_details': errors,
         })
+
+    @action(detail=True, methods=['post'], url_path='attachments',
+            parser_classes=[MultiPartParser, FormParser])
+    def upload_attachment(self, request, pk=None):
+        """
+        POST /api/v1/expense/requests/{id}/attachments/
+        領収書ファイルをアップロード
+        """
+        req = self.get_object()
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': 'ファイルが指定されていません'}, status=status.HTTP_400_BAD_REQUEST)
+
+        attach = ExpenseAttachment.objects.create(
+            request      = req,
+            file         = file,
+            file_name    = file.name,
+            file_size    = file.size,
+            content_type = file.content_type or 'application/octet-stream',
+        )
+        return Response(ExpenseAttachmentSerializer(attach).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['delete'], url_path='attachments/(?P<attach_id>[^/.]+)')
+    def delete_attachment(self, request, pk=None, attach_id=None):
+        """
+        DELETE /api/v1/expense/requests/{id}/attachments/{attach_id}/
+        添付ファイルを削除
+        """
+        req = self.get_object()
+        try:
+            attach = ExpenseAttachment.objects.get(id=attach_id, request=req)
+        except ExpenseAttachment.DoesNotExist:
+            return Response({'error': '添付ファイルが見つかりません'}, status=status.HTTP_404_NOT_FOUND)
+        attach.file.delete(save=False)
+        attach.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['get'], url_path='attachments/(?P<attach_id>[^/.]+)/download')
+    def download_attachment(self, request, pk=None, attach_id=None):
+        """
+        GET /api/v1/expense/requests/{id}/attachments/{attach_id}/download/
+        添付ファイルをダウンロード
+        """
+        req = self.get_object()
+        try:
+            attach = ExpenseAttachment.objects.get(id=attach_id, request=req)
+        except ExpenseAttachment.DoesNotExist:
+            return Response({'error': '添付ファイルが見つかりません'}, status=status.HTTP_404_NOT_FOUND)
+        response = FileResponse(attach.file.open('rb'), content_type=attach.content_type)
+        response['Content-Disposition'] = f'attachment; filename="{attach.file_name}"'
+        return response
