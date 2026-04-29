@@ -2,7 +2,7 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
-import { CheckSquare, Plus, X, Calendar, Pencil, BookOpen, GripVertical, Send } from 'lucide-react'
+import { CheckSquare, Plus, X, Calendar, Pencil, BookOpen, GripVertical, Send, Sparkles, Loader2 } from 'lucide-react'
 
 // ===== 型定義 =====
 type TodoStatus = 'not_started' | 'in_progress' | 'done'
@@ -404,6 +404,18 @@ function DailyReportSection() {
   const [tomorrow, setTomorrow] = useState('')
   const [issues, setIssues]     = useState('')
   const [saving, setSaving]     = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
+
+  const requestAI = async () => {
+    if (!content.trim()) return
+    setAiLoading(true)
+    try {
+      const res = await api.post('/api/v1/ai/draft-daily-report/', { bullet_points: content })
+      setContent(res.data.draft)
+    } catch { /* silent */ } finally {
+      setAiLoading(false)
+    }
+  }
 
   const { data: reports = [] } = useQuery<DailyReport[]>({
     queryKey: ['daily-reports'],
@@ -508,16 +520,30 @@ function DailyReportSection() {
         )}
 
         <div>
-          <label className="text-sm font-medium text-gray-700 block mb-1">
-            作業内容 <span className="text-red-500">*</span>
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-sm font-medium text-gray-700">
+              作業内容 <span className="text-red-500">*</span>
+            </label>
+            {!isSubmitted && (
+              <button
+                type="button"
+                onClick={requestAI}
+                disabled={aiLoading || !content.trim()}
+                className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 disabled:text-gray-400 disabled:cursor-not-allowed"
+                title="箇条書きからAIが日報を作成します"
+              >
+                {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                AI生成
+              </button>
+            )}
+          </div>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={5}
             disabled={isSubmitted}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none disabled:bg-gray-50 disabled:text-gray-600"
-            placeholder="本日取り組んだ作業内容を記入してください"
+            placeholder="箇条書きでメモを入力→「AI生成」で文章化、または直接記入"
           />
         </div>
         <div>

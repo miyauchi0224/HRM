@@ -63,6 +63,25 @@ class ApprovalRequest(SoftDeleteModel):
         return self.title
 
 
+class ApprovalAttachment(SoftDeleteModel):
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    request     = models.ForeignKey(ApprovalRequest, on_delete=models.CASCADE, related_name='file_attachments')
+    file        = models.FileField(upload_to='approval/attachments/%Y/%m/')
+    file_name   = models.CharField(max_length=255)
+    file_size   = models.PositiveIntegerField()
+    content_type = models.CharField(max_length=100)
+    uploaded_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True,
+                                    related_name='approval_file_uploads')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '稟議添付ファイル'
+        ordering     = ['uploaded_at']
+
+    def __str__(self):
+        return f'{self.request} - {self.file_name}'
+
+
 class ApprovalStep(SoftDeleteModel):
     """稟議の承認ルート（各承認者）"""
 

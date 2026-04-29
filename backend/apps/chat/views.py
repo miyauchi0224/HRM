@@ -27,6 +27,38 @@ class ChatRoomViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             users = User.objects.filter(id__in=member_ids)
             room.members.add(*users)
 
+    @action(detail=True, methods=['post'], url_path='add-member')
+    def add_member(self, request, pk=None):
+        """POST /api/v1/chat/rooms/{id}/add-member/ { user_id }"""
+        room = self.get_object()
+        if room.room_type != ChatRoom.RoomType.GROUP:
+            return Response({'error': 'グループチャットのみメンバー変更できます'}, status=400)
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'user_idが必要です'}, status=400)
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            return Response({'error': 'ユーザーが見つかりません'}, status=404)
+        room.members.add(user)
+        return Response({'status': 'added', 'user_id': user_id})
+
+    @action(detail=True, methods=['post'], url_path='remove-member')
+    def remove_member(self, request, pk=None):
+        """POST /api/v1/chat/rooms/{id}/remove-member/ { user_id }"""
+        room = self.get_object()
+        if room.room_type != ChatRoom.RoomType.GROUP:
+            return Response({'error': 'グループチャットのみメンバー変更できます'}, status=400)
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'user_idが必要です'}, status=400)
+        # 作成者は削除不可
+        if str(room.created_by_id) == str(user_id):
+            return Response({'error': '作成者はメンバーから削除できません'}, status=400)
+        user = User.objects.filter(id=user_id).first()
+        if user:
+            room.members.remove(user)
+        return Response({'status': 'removed', 'user_id': user_id})
+
     @action(detail=False, methods=['post'], url_path='direct')
     def get_or_create_direct(self, request):
         """2人のDMルームを取得または作成"""

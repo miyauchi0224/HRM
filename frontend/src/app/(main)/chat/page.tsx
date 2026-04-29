@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { MessageSquare, Plus, Send, Paperclip, X, FileText, Image as ImageIcon } from 'lucide-react'
+import { MessageSquare, Plus, Send, Paperclip, X, FileText, Image as ImageIcon, Users, Sparkles, Loader2 } from 'lucide-react'
 
 const MAX_TOTAL_BYTES = 10 * 1024 * 1024 // 10MB
 
@@ -20,6 +20,7 @@ interface ChatRoom {
   id: string
   room_type: 'direct' | 'group'
   name: string
+  created_by: string | null
   members: Array<{ id: string; full_name: string; email: string }>
   last_message: { content: string; sender: string; created_at: string } | null
   unread_count: number
@@ -43,7 +44,20 @@ export default function ChatPage() {
   const [message, setMessage] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [sizeError, setSizeError] = useState('')
+  const [aiPolishing, setAiPolishing] = useState(false)
+
+  const polishWithAI = async () => {
+    if (!message.trim()) return
+    setAiPolishing(true)
+    try {
+      const res = await api.post('/api/v1/ai/draft-daily-report/', { bullet_points: message })
+      setMessage(res.data.draft)
+    } catch { /* silent */ } finally {
+      setAiPolishing(false)
+    }
+  }
   const [showNewGroup, setShowNewGroup] = useState(false)
+  const [showMemberMgmt, setShowMemberMgmt] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -85,6 +99,14 @@ export default function ChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // rooms が更新されたとき selectedRoom を同期する
+  useEffect(() => {
+    if (selectedRoom) {
+      const updated = rooms.find((r) => r.id === selectedRoom.id)
+      if (updated) setSelectedRoom(updated)
+    }
+  }, [rooms])
 
   const getRoomName = (room: ChatRoom) => {
     if (room.room_type === 'group') return room.name || 'グループ'
@@ -180,7 +202,7 @@ export default function ChatPage() {
               <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm">
                 {getRoomName(selectedRoom).slice(0, 1)}
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="font-semibold text-gray-800">{getRoomName(selectedRoom)}</p>
                 <p className="text-xs text-gray-400">
                   {selectedRoom.room_type === 'group'
@@ -188,6 +210,17 @@ export default function ChatPage() {
                     : 'ダイレクトメッセージ'}
                 </p>
               </div>
+              {/* グループのみ: メンバー管理ボタン */}
+              {selectedRoom.room_type === 'group' && (
+                <button
+                  onClick={() => setShowMemberMgmt(true)}
+                  className="flex items-center gap-1.5 text-sm text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"
+                  title="メンバー管理"
+                >
+                  <Users size={16} />
+                  <span>メンバー管理</span>
+                </button>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -304,16 +337,26 @@ export default function ChatPage() {
                 >
                   <Paperclip size={18} />
                 </button>
-                <textarea
-                  className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
-                  placeholder="メッセージを入力..."
-                  rows={1}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
-                  }}
-                />
+                <div className="flex-1 relative">
+                  <textarea
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                    placeholder="メッセージを入力… (Sparklesボタンでメモ→AI文章化)"
+                    rows={1}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+                    }}
+                  />
+                  <button
+                    onClick={polishWithAI}
+                    disabled={aiPolishing || !message.trim()}
+                    className="absolute right-2 bottom-2 p-1 text-purple-400 hover:text-purple-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="メモ・箇条書きをAIが文章化"
+                  >
+                    {aiPolishing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  </button>
+                </div>
                 <button
                   onClick={handleSend}
                   disabled={!message.trim() && files.length === 0}
@@ -344,10 +387,177 @@ export default function ChatPage() {
           setShowNewGroup(false)
         }} />
       )}
+
+      {showMemberMgmt && selectedRoom && (
+        <MemberManagementModal
+          room={selectedRoom}
+          onClose={() => setShowMemberMgmt(false)}
+          onChanged={() => {
+            qc.invalidateQueries({ queryKey: ['chat-rooms'] })
+          }}
+        />
+      )}
     </div>
   )
 }
 
+// ─────────────────────────────────────────────
+// メンバー管理モーダル
+// ─────────────────────────────────────────────
+function MemberManagementModal({
+  room,
+  onClose,
+  onChanged,
+}: {
+  room: ChatRoom
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const qc = useQueryClient()
+  const [search, setSearch] = useState('')
+
+  const { data: employees = [] } = useQuery({
+    queryKey: ['employees-for-chat'],
+    queryFn: () => api.get('/api/v1/employees/').then((r) => r.data.results ?? r.data),
+  })
+
+  const addMut = useMutation({
+    mutationFn: (userId: string) =>
+      api.post(`/api/v1/chat/rooms/${room.id}/add-member/`, { user_id: userId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['chat-rooms'] })
+      onChanged()
+    },
+  })
+
+  const removeMut = useMutation({
+    mutationFn: (userId: string) =>
+      api.post(`/api/v1/chat/rooms/${room.id}/remove-member/`, { user_id: userId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['chat-rooms'] })
+      onChanged()
+    },
+  })
+
+  // 現在のメンバーIDセット
+  const memberIds = new Set(room.members.map((m) => m.id))
+
+  // 検索フィルタ: まだメンバーでない従業員を対象に絞り込む
+  const filtered = employees.filter((emp: any) => {
+    const uid = emp.user?.id
+    if (!uid || memberIds.has(uid)) return false
+    return emp.full_name?.includes(search) || emp.user?.email?.includes(search)
+  })
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+            <Users size={20} className="text-indigo-600" />
+            メンバー管理
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* 現在のメンバー一覧 */}
+        <div className="mb-5">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            現在のメンバー（{room.members.length}名）
+          </p>
+          <div className="border rounded-xl divide-y max-h-44 overflow-y-auto">
+            {room.members.map((member) => {
+              const isCreator = member.id === room.created_by
+              return (
+                <div key={member.id} className="flex items-center justify-between px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold shrink-0">
+                      {member.full_name.slice(0, 1)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{member.full_name}</p>
+                      <p className="text-xs text-gray-400">{member.email}</p>
+                    </div>
+                    {isCreator && (
+                      <span className="ml-2 text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full">
+                        作成者
+                      </span>
+                    )}
+                  </div>
+                  {!isCreator && (
+                    <button
+                      onClick={() => removeMut.mutate(member.id)}
+                      disabled={removeMut.isPending}
+                      className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      削除
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* メンバー追加エリア */}
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            メンバーを追加
+          </p>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            placeholder="名前・メールで検索..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="border rounded-xl divide-y max-h-44 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">
+                {search ? '該当なし' : '追加できるユーザーがいません'}
+              </p>
+            ) : (
+              filtered.map((emp: any) => (
+                <div key={emp.id} className="flex items-center justify-between px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold shrink-0">
+                      {emp.full_name?.slice(0, 1)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{emp.full_name}</p>
+                      <p className="text-xs text-gray-400">{emp.user?.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => addMut.mutate(emp.user?.id)}
+                    disabled={addMut.isPending}
+                    className="text-xs text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    追加
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end">
+          <button
+            onClick={onClose}
+            className="bg-gray-100 text-gray-700 px-5 py-2 rounded-lg text-sm hover:bg-gray-200"
+          >
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
+// グループ作成モーダル
+// ─────────────────────────────────────────────
 function NewGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated: (room: any) => void }) {
   const [name, setName] = useState('')
   const [memberIds, setMemberIds] = useState<string[]>([])

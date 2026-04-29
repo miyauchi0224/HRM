@@ -276,6 +276,95 @@ class HRQueryView(APIView):
         return 'AI処理が完了しませんでした。'
 
 
+class DraftIntraArticleView(APIView):
+    """AIがイントラ記事の本文を下書き"""
+    permission_classes = [IsNotCustomer]
+
+    def post(self, request):
+        title   = request.data.get('title', '')
+        summary = request.data.get('summary', '')
+        if not title:
+            return Response({'error': 'タイトルを入力してください'}, status=status.HTTP_400_BAD_REQUEST)
+
+        client = get_client(request.user)
+        if not client:
+            return Response({'error': 'AI機能が設定されていません'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        prompt = f"""社内イントラネット記事の本文を日本語で作成してください。
+ビジネス文書として適切な文体で、400〜800字程度にまとめてください。
+タイトル: {title}
+概要・ポイント: {summary}
+記事本文:"""
+
+        try:
+            msg = client.messages.create(
+                model='claude-haiku-4-5-20251001', max_tokens=1000,
+                messages=[{'role': 'user', 'content': prompt}],
+            )
+            return Response({'draft': msg.content[0].text if msg.content else ''})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DraftJobPostingView(APIView):
+    """AIが採用求人票を下書き"""
+    permission_classes = [IsHR]
+
+    def post(self, request):
+        job_title  = request.data.get('job_title', '')
+        department = request.data.get('department', '')
+        focus      = request.data.get('focus', '')
+        if not job_title:
+            return Response({'error': '職種名を入力してください'}, status=status.HTTP_400_BAD_REQUEST)
+
+        client = get_client(request.user)
+        if not client:
+            return Response({'error': 'AI機能が設定されていません'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        prompt = f"""以下の情報をもとに採用求人票を日本語で作成してください。
+「職務内容」「必須要件」「歓迎要件」の3つのセクションに分けて記述してください。
+職種: {job_title}
+部署: {department}
+重視する点: {focus}
+求人票:"""
+
+        try:
+            msg = client.messages.create(
+                model='claude-haiku-4-5-20251001', max_tokens=800,
+                messages=[{'role': 'user', 'content': prompt}],
+            )
+            return Response({'draft': msg.content[0].text if msg.content else ''})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DraftNextMonthIssueView(APIView):
+    """AIが月報「次月の課題」を下書き"""
+    permission_classes = [IsNotCustomer]
+
+    def post(self, request):
+        result = request.data.get('result', '')
+        goal   = request.data.get('goal', '')
+
+        client = get_client(request.user)
+        if not client:
+            return Response({'error': 'AI機能が設定されていません'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        prompt = f"""以下の月報内容をもとに「次月の課題」を日本語150字程度で提案してください。
+目標: {goal}
+今月の結果・考察: {result}
+次月の課題案:"""
+
+        try:
+            msg = client.messages.create(
+                model='claude-haiku-4-5-20251001', max_tokens=300,
+                messages=[{'role': 'user', 'content': prompt}],
+            )
+            return Response({'draft': msg.content[0].text if msg.content else ''})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class AnalyzeExpenseReceiptView(APIView):
     """領収書画像からAIが金額・日付・内容を読み取る（OCR）"""
     permission_classes = [IsNotCustomer]

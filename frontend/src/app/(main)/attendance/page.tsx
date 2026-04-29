@@ -7,10 +7,11 @@ import {
   Clock, Play, Square, Download, Upload,
   FileSpreadsheet, FileText, File,
   ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check, ShieldAlert,
+  GanttChartSquare, CheckCircle2, Circle,
 } from 'lucide-react'
 
 type AttendanceStatus = 'not_started' | 'working' | 'break' | 'done'
-type Tab = 'clock' | 'export' | 'upload' | 'projects' | 'overtime36'
+type Tab = 'clock' | 'export' | 'upload' | 'projects' | 'overtime36' | 'gantt'
 
 // ===== 月ナビゲーション用ユーティリティ =====
 function addMonths(ym: string, delta: number): string {
@@ -25,10 +26,12 @@ interface ProjectEntry {
 }
 
 interface EditData {
-  clock_in:        string
-  clock_out:       string
-  break_minutes:   number
-  project_records: ProjectEntry[]
+  stamped_clock_in:  string
+  clock_in:          string
+  stamped_clock_out: string
+  clock_out:         string
+  break_minutes:     number
+  project_records:   ProjectEntry[]
 }
 
 export default function AttendancePage() {
@@ -39,7 +42,7 @@ export default function AttendancePage() {
   const [activeTab, setActiveTab]       = useState<Tab>('clock')
   const [yearMonth, setYearMonth]       = useState(() => new Date().toISOString().slice(0, 7))
   const [editId, setEditId]             = useState<string | null>(null)
-  const [editData, setEditData]         = useState<EditData>({ clock_in: '', clock_out: '', break_minutes: 60, project_records: [] })
+  const [editData, setEditData]         = useState<EditData>({ stamped_clock_in: '', clock_in: '', stamped_clock_out: '', clock_out: '', break_minutes: 60, project_records: [] })
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -83,10 +86,12 @@ export default function AttendancePage() {
   const startEdit = (r: any) => {
     setEditId(r.id)
     setEditData({
-      clock_in:        r.clock_in  ?? '',
-      clock_out:       r.clock_out ?? '',
-      break_minutes:   r.break_minutes ?? 60,
-      project_records: (r.project_records ?? []).map((pr: any) => ({
+      stamped_clock_in:  r.stamped_clock_in  ?? '',
+      clock_in:          r.clock_in          ?? '',
+      stamped_clock_out: r.stamped_clock_out ?? '',
+      clock_out:         r.clock_out         ?? '',
+      break_minutes:     r.break_minutes     ?? 60,
+      project_records:   (r.project_records ?? []).map((pr: any) => ({
         project: pr.project,
         minutes: pr.minutes,
       })),
@@ -98,10 +103,12 @@ export default function AttendancePage() {
     updateMutation.mutate({
       id: editId,
       data: {
-        clock_in:        editData.clock_in  || null,
-        clock_out:       editData.clock_out || null,
-        break_minutes:   editData.break_minutes,
-        project_records: editData.project_records.filter((pr) => pr.project),
+        stamped_clock_in:  editData.stamped_clock_in  || null,
+        clock_in:          editData.clock_in          || null,
+        stamped_clock_out: editData.stamped_clock_out || null,
+        clock_out:         editData.clock_out         || null,
+        break_minutes:     editData.break_minutes,
+        project_records:   editData.project_records.filter((pr) => pr.project),
       },
     })
   }
@@ -139,6 +146,7 @@ export default function AttendancePage() {
     { key: 'export',     label: 'エクスポート' },
     { key: 'upload',     label: 'アップロード' },
     { key: 'projects',   label: 'プロジェクト' },
+    { key: 'gantt',      label: 'ガントチャート' },
     ...(isManager ? [{ key: 'overtime36' as Tab, label: '36協定状況' }] : []),
   ]
 
@@ -277,8 +285,10 @@ export default function AttendancePage() {
                 <thead>
                   <tr className="text-gray-500 border-b text-xs">
                     <th className="text-left py-2 font-medium">日付</th>
-                    <th className="text-left py-2 font-medium">出勤</th>
-                    <th className="text-left py-2 font-medium">退勤</th>
+                    <th className="text-left py-2 font-medium">出勤打刻<br/><span className="text-gray-400 font-normal">出社時刻</span></th>
+                    <th className="text-left py-2 font-medium">出勤時刻<br/><span className="text-gray-400 font-normal">勤務開始</span></th>
+                    <th className="text-left py-2 font-medium">退勤打刻<br/><span className="text-gray-400 font-normal">退社時刻</span></th>
+                    <th className="text-left py-2 font-medium">退勤時刻<br/><span className="text-gray-400 font-normal">勤務終了</span></th>
                     <th className="text-left py-2 font-medium">休憩(分)</th>
                     <th className="text-left py-2 font-medium">プロジェクト</th>
                     <th className="text-left py-2 font-medium">労働時間</th>
@@ -288,7 +298,7 @@ export default function AttendancePage() {
                 </thead>
                 <tbody>
                   {records.map((r: any) => (
-                    <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
+                    <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50" onDoubleClick={() => editId !== r.id && startEdit(r)} title="ダブルクリックで編集">
                       {editId === r.id ? (
                         <>
                           {/* 編集行 */}
@@ -296,9 +306,28 @@ export default function AttendancePage() {
                           <td className="py-1 pr-1">
                             <input
                               type="time"
+                              value={editData.stamped_clock_in}
+                              onChange={(e) => setEditData((d) => ({ ...d, stamped_clock_in: e.target.value }))}
+                              className="w-[90px] px-1.5 py-1 border border-orange-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
+                              title="出社時刻（打刻）"
+                            />
+                          </td>
+                          <td className="py-1 pr-1">
+                            <input
+                              type="time"
                               value={editData.clock_in}
                               onChange={(e) => setEditData((d) => ({ ...d, clock_in: e.target.value }))}
                               className="w-[90px] px-1.5 py-1 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              title="勤務開始時刻"
+                            />
+                          </td>
+                          <td className="py-1 pr-1">
+                            <input
+                              type="time"
+                              value={editData.stamped_clock_out}
+                              onChange={(e) => setEditData((d) => ({ ...d, stamped_clock_out: e.target.value }))}
+                              className="w-[90px] px-1.5 py-1 border border-orange-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
+                              title="退社時刻（打刻）"
                             />
                           </td>
                           <td className="py-1 pr-1">
@@ -307,6 +336,7 @@ export default function AttendancePage() {
                               value={editData.clock_out}
                               onChange={(e) => setEditData((d) => ({ ...d, clock_out: e.target.value }))}
                               className="w-[90px] px-1.5 py-1 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              title="勤務終了時刻"
                             />
                           </td>
                           <td className="py-1 pr-1">
@@ -365,6 +395,8 @@ export default function AttendancePage() {
                           </td>
                           <td className="py-1 text-gray-400 text-xs">—</td>
                           <td className="py-1 text-gray-400 text-xs">—</td>
+                          <td className="py-1 text-gray-400 text-xs">—</td>
+                          <td className="py-1 text-gray-400 text-xs">—</td>
                           <td className="py-1">
                             <div className="flex gap-1">
                               <button
@@ -389,17 +421,17 @@ export default function AttendancePage() {
                         <>
                           {/* 表示行 */}
                           <td className="py-2 text-xs text-gray-600 whitespace-nowrap">{r.date}</td>
-                          <td className="py-2 text-xs whitespace-nowrap">
-                            {r.clock_in ?? '—'}
-                            {r.stamped_clock_in && r.stamped_clock_in !== r.clock_in && (
-                              <span className="ml-1 text-gray-400">(打刻:{r.stamped_clock_in})</span>
-                            )}
+                          <td className="py-2 text-xs whitespace-nowrap text-orange-600 font-medium">
+                            {r.stamped_clock_in ?? '—'}
                           </td>
-                          <td className="py-2 text-xs whitespace-nowrap">
+                          <td className="py-2 text-xs whitespace-nowrap text-blue-700">
+                            {r.clock_in ?? '—'}
+                          </td>
+                          <td className="py-2 text-xs whitespace-nowrap text-orange-600 font-medium">
+                            {r.stamped_clock_out ?? '—'}
+                          </td>
+                          <td className="py-2 text-xs whitespace-nowrap text-blue-700">
                             {r.clock_out ?? '—'}
-                            {r.stamped_clock_out && r.stamped_clock_out !== r.clock_out && (
-                              <span className="ml-1 text-gray-400">(打刻:{r.stamped_clock_out})</span>
-                            )}
                           </td>
                           <td className="py-2 text-xs">{r.break_minutes ?? '—'}</td>
                           <td className="py-2 text-xs text-gray-500">
@@ -460,6 +492,11 @@ export default function AttendancePage() {
       {/* === タブ: プロジェクト === */}
       {activeTab === 'projects' && (
         <ProjectsPanel />
+      )}
+
+      {/* === タブ: ガントチャート === */}
+      {activeTab === 'gantt' && (
+        <GanttPanel />
       )}
 
       {/* === タブ: 36協定状況 === */}
@@ -704,12 +741,19 @@ function UploadPanel({ onSuccess }: { onSuccess: () => void }) {
 }
 
 // ===== プロジェクト管理パネル =====
+interface Manager {
+  id: string
+  full_name: string
+}
+
 interface Project {
   id: string
   code: string
   name: string
-  manager: string | null        // Employee UUID
-  manager_name: string | null
+  primary_managers: Manager[]
+  secondary_managers: Manager[]
+  primary_manager_ids?: string[]
+  secondary_manager_ids?: string[]
   start_date: string | null
   end_date: string | null
 }
@@ -795,17 +839,41 @@ function ProjectsPanel() {
                           className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                         />
                       </td>
-                      <td className="px-4 py-2">
-                        <select
-                          value={editData.manager ?? ''}
-                          onChange={(e) => setEditData((d) => ({ ...d, manager: e.target.value || null }))}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        >
-                          <option value="">なし</option>
-                          {employees.map((e: any) => (
-                            <option key={e.id} value={e.id}>{e.full_name}</option>
-                          ))}
-                        </select>
+                      <td className="px-4 py-2 space-y-2">
+                        <div>
+                          <label className="text-xs text-gray-500 block mb-1">主管理者</label>
+                          <select
+                            multiple
+                            value={editData.primary_manager_ids ?? []}
+                            onChange={(e) => setEditData((d) => ({
+                              ...d,
+                              primary_manager_ids: Array.from(e.target.selectedOptions, (opt) => opt.value)
+                            }))}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            size={2}
+                          >
+                            {employees.map((e: any) => (
+                              <option key={e.id} value={e.id}>{e.full_name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 block mb-1">従管理者</label>
+                          <select
+                            multiple
+                            value={editData.secondary_manager_ids ?? []}
+                            onChange={(e) => setEditData((d) => ({
+                              ...d,
+                              secondary_manager_ids: Array.from(e.target.selectedOptions, (opt) => opt.value)
+                            }))}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            size={2}
+                          >
+                            {employees.map((e: any) => (
+                              <option key={e.id} value={e.id}>{e.full_name}</option>
+                            ))}
+                          </select>
+                        </div>
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex gap-1.5">
@@ -828,7 +896,23 @@ function ProjectsPanel() {
                     <>
                       <td className="px-4 py-3 font-mono text-gray-700">{p.code}</td>
                       <td className="px-4 py-3 text-gray-800">{p.name}</td>
-                      <td className="px-4 py-3 text-gray-500">{p.manager_name ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-500">
+                        <div className="space-y-1">
+                          {p.primary_managers?.length > 0 && (
+                            <div className="text-xs">
+                              <span className="font-medium text-gray-600">主: </span>
+                              {p.primary_managers.map(m => m.full_name).join(', ')}
+                            </div>
+                          )}
+                          {p.secondary_managers?.length > 0 && (
+                            <div className="text-xs">
+                              <span className="font-medium text-gray-600">従: </span>
+                              {p.secondary_managers.map(m => m.full_name).join(', ')}
+                            </div>
+                          )}
+                          {!p.primary_managers?.length && !p.secondary_managers?.length && '—'}
+                        </div>
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1.5">
                           <button
@@ -877,11 +961,12 @@ function NewProjectModal({
   onClose: () => void
   onSaved: () => void
 }) {
-  const [code,      setCode]      = useState('')
-  const [name,      setName]      = useState('')
-  const [managerId, setManagerId] = useState('')
-  const [saving,    setSaving]    = useState(false)
-  const [error,     setError]     = useState('')
+  const [code,              setCode]              = useState('')
+  const [name,              setName]              = useState('')
+  const [primaryManagers,   setPrimaryManagers]   = useState<string[]>([])
+  const [secondaryManagers, setSecondaryManagers] = useState<string[]>([])
+  const [saving,            setSaving]            = useState(false)
+  const [error,             setError]             = useState('')
 
   const save = async () => {
     setSaving(true)
@@ -890,14 +975,15 @@ function NewProjectModal({
       await api.post('/api/v1/attendance/projects/', {
         code,
         name,
-        manager: managerId || null,
+        primary_manager_ids: primaryManagers,
+        secondary_manager_ids: secondaryManagers,
       })
       onSaved()
     } catch (e: any) {
       setError(
         e.response?.data?.code?.[0] ??
         e.response?.data?.name?.[0] ??
-        e.response?.data?.manager?.[0] ??
+        e.response?.data?.primary_manager_ids?.[0] ??
         '登録に失敗しました'
       )
     } finally {
@@ -937,14 +1023,32 @@ function NewProjectModal({
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">
-              管理者 <span className="text-red-500">*</span>
+              主管理者 <span className="text-red-500">*</span>
             </label>
             <select
-              value={managerId}
-              onChange={(e) => setManagerId(e.target.value)}
+              multiple
+              value={primaryManagers}
+              onChange={(e) => setPrimaryManagers(Array.from(e.target.selectedOptions, (opt) => opt.value))}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              size={3}
             >
-              <option value="">選択してください</option>
+              {employees.map((e: any) => (
+                <option key={e.id} value={e.id}>{e.full_name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">Ctrl+クリックで複数選択</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700 block mb-1">
+              従管理者
+            </label>
+            <select
+              multiple
+              value={secondaryManagers}
+              onChange={(e) => setSecondaryManagers(Array.from(e.target.selectedOptions, (opt) => opt.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              size={3}
+            >
               {employees.map((e: any) => (
                 <option key={e.id} value={e.id}>{e.full_name}</option>
               ))}
@@ -961,13 +1065,237 @@ function NewProjectModal({
           </button>
           <button
             onClick={save}
-            disabled={!code.trim() || !name.trim() || !managerId || saving}
+            disabled={!code.trim() || !name.trim() || primaryManagers.length === 0 || saving}
             className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg text-sm font-medium"
           >
             {saving ? '登録中...' : '登録'}
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ===== ガントチャートパネル =====
+function GanttPanel() {
+  const qc = useQueryClient()
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [showTaskForm, setShowTaskForm] = useState(false)
+  const [editTask, setEditTask] = useState<any | null>(null)
+  const [taskForm, setTaskForm] = useState({ title: '', start_date: '', end_date: '', status: 'todo', progress: 0, assignee: '', description: '' })
+
+  const { data: projects = [] } = useQuery<any[]>({
+    queryKey: ['projects-all'],
+    queryFn: () => api.get('/api/v1/attendance/projects/').then(r => r.data.results ?? r.data),
+  })
+  const { data: employees = [] } = useQuery<any[]>({
+    queryKey: ['employees-mini'],
+    queryFn: () => api.get('/api/v1/employees/').then(r => r.data.results ?? r.data),
+  })
+  const { data: ganttData, isLoading } = useQuery<any>({
+    queryKey: ['gantt', selectedProjectId],
+    queryFn: () => api.get(`/api/v1/attendance/projects/${selectedProjectId}/gantt/`).then(r => r.data),
+    enabled: !!selectedProjectId,
+  })
+
+  const createTaskMut = useMutation({
+    mutationFn: (data: any) => api.post('/api/v1/attendance/project-tasks/', { ...data, project: selectedProjectId }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['gantt', selectedProjectId] }); setShowTaskForm(false); resetForm() },
+  })
+  const updateTaskMut = useMutation({
+    mutationFn: ({ id, data }: any) => api.patch(`/api/v1/attendance/project-tasks/${id}/`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['gantt', selectedProjectId] }); setEditTask(null) },
+  })
+  const deleteTaskMut = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/v1/attendance/project-tasks/${id}/`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['gantt', selectedProjectId] }),
+  })
+
+  const resetForm = () => setTaskForm({ title: '', start_date: '', end_date: '', status: 'todo', progress: 0, assignee: '', description: '' })
+
+  const tasks: any[] = ganttData?.tasks ?? []
+  const project = ganttData?.project
+
+  // ガントチャート描画用: 全タスクの日付範囲を計算
+  const allDates = tasks.flatMap(t => [t.start_date, t.end_date].filter(Boolean))
+  const minDate = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : new Date().toISOString().slice(0, 10)
+  const maxDate = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : new Date().toISOString().slice(0, 10)
+  const startMs = new Date(minDate).getTime()
+  const endMs   = new Date(maxDate).getTime()
+  const totalDays = Math.max(1, Math.ceil((endMs - startMs) / 86400000) + 1)
+
+  const STATUS_COLOR: Record<string, string> = {
+    todo: 'bg-gray-300', in_progress: 'bg-blue-400', review: 'bg-yellow-400', done: 'bg-green-400',
+  }
+  const STATUS_LABEL: Record<string, string> = {
+    todo: '未着手', in_progress: '進行中', review: 'レビュー中', done: '完了',
+  }
+
+  const downloadTemplate = async () => {
+    if (!selectedProjectId) return
+    const res = await api.get(`/api/v1/attendance/projects/${selectedProjectId}/template-csv/`, { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'tasks_template.csv'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const importRef = useRef<HTMLInputElement>(null)
+  const importMut = useMutation({
+    mutationFn: (fd: FormData) => api.post(`/api/v1/attendance/projects/${selectedProjectId}/import-tasks/`, fd),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['gantt', selectedProjectId] }); setImportFile(null) },
+  })
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <GanttChartSquare size={20} className="text-blue-500" />
+        <h2 className="font-semibold text-gray-700">プロジェクト ガントチャート</h2>
+        <select
+          value={selectedProjectId ?? ''}
+          onChange={e => setSelectedProjectId(e.target.value || null)}
+          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm ml-auto"
+        >
+          <option value="">プロジェクトを選択</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.code} {p.name}</option>)}
+        </select>
+      </div>
+
+      {selectedProjectId && (
+        <>
+          {/* プロジェクト情報 */}
+          {project && (
+            <div className="bg-white border border-gray-200 rounded-xl p-4 text-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-semibold text-gray-800">{project.code} {project.name}</span>
+                  <span className="ml-3 text-gray-500 text-xs">{project.start_date} 〜 {project.end_date}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={downloadTemplate} className="text-xs border border-gray-300 px-2 py-1 rounded hover:bg-gray-50">テンプレートDL</button>
+                  <button onClick={() => importRef.current?.click()} className="text-xs border border-blue-300 text-blue-600 px-2 py-1 rounded hover:bg-blue-50">CSV一括登録</button>
+                  <input ref={importRef} type="file" accept=".csv" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) { const fd = new FormData(); fd.append('file', f); importMut.mutate(fd) } }} />
+                  <button onClick={() => setShowTaskForm(true)} className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700">+ タスク追加</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ガントチャート */}
+          {isLoading ? <p className="text-gray-400 text-sm">読み込み中...</p> : tasks.length === 0 ? (
+            <p className="text-gray-400 text-sm bg-white border rounded-xl p-8 text-center">タスクがありません。「タスク追加」から作業項目を登録してください。</p>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="text-xs w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600 w-48 min-w-[12rem]">タスク名</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600 w-20">担当者</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600 w-20">ステータス</th>
+                      <th className="text-right px-3 py-2 font-medium text-gray-600 w-12">進捗</th>
+                      <th className="px-3 py-2 font-medium text-gray-600 min-w-[300px]">
+                        <div className="flex justify-between text-gray-400">
+                          <span>{minDate}</span><span>{maxDate}</span>
+                        </div>
+                      </th>
+                      <th className="w-16" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {tasks.map(task => {
+                      const taskStart = task.start_date ? new Date(task.start_date).getTime() : startMs
+                      const taskEnd   = task.end_date   ? new Date(task.end_date).getTime()   : taskStart
+                      const leftPct   = totalDays > 1 ? ((taskStart - startMs) / (endMs - startMs)) * 100 : 0
+                      const widthPct  = totalDays > 1 ? Math.max(2, ((taskEnd - taskStart) / (endMs - startMs)) * 100) : 100
+                      return (
+                        <tr key={task.id} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 font-medium text-gray-800 truncate max-w-[12rem]">{task.title}</td>
+                          <td className="px-3 py-2 text-gray-500 truncate">{task.assignee_name ?? '—'}</td>
+                          <td className="px-3 py-2">
+                            <span className={`px-1.5 py-0.5 rounded text-white text-xs ${STATUS_COLOR[task.status]}`}>
+                              {STATUS_LABEL[task.status]}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-600">{task.progress}%</td>
+                          <td className="px-3 py-2">
+                            <div className="relative h-5 bg-gray-100 rounded">
+                              {task.start_date && (
+                                <div
+                                  className={`absolute h-full rounded ${STATUS_COLOR[task.status]} opacity-80`}
+                                  style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                                  title={`${task.start_date} 〜 ${task.end_date}`}
+                                />
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <button onClick={() => { setEditTask(task); setTaskForm({ title: task.title, start_date: task.start_date ?? '', end_date: task.end_date ?? '', status: task.status, progress: task.progress, assignee: task.assignee ?? '', description: task.description }) }} className="p-1 text-gray-400 hover:text-blue-500"><Pencil size={12} /></button>
+                            <button onClick={() => { if (confirm('削除しますか？')) deleteTaskMut.mutate(task.id) }} className="p-1 text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* タスク追加フォーム */}
+          {(showTaskForm || editTask) && (
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <h3 className="font-medium text-gray-700 mb-3 text-sm">{editTask ? 'タスク編集' : 'タスク追加'}</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="col-span-2">
+                  <label className="text-xs text-gray-500 block mb-1">タスク名 *</label>
+                  <input value={taskForm.title} onChange={e => setTaskForm(f => ({...f, title: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">担当者</label>
+                  <select value={taskForm.assignee} onChange={e => setTaskForm(f => ({...f, assignee: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <option value="">未割当</option>
+                    {employees.map((emp: any) => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">ステータス</label>
+                  <select value={taskForm.status} onChange={e => setTaskForm(f => ({...f, status: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">開始予定日</label>
+                  <input type="date" value={taskForm.start_date} onChange={e => setTaskForm(f => ({...f, start_date: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">終了予定日</label>
+                  <input type="date" value={taskForm.end_date} onChange={e => setTaskForm(f => ({...f, end_date: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">進捗率 ({taskForm.progress}%)</label>
+                  <input type="range" min={0} max={100} value={taskForm.progress} onChange={e => setTaskForm(f => ({...f, progress: Number(e.target.value)}))} className="w-full" />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => {
+                    const payload = { title: taskForm.title, start_date: taskForm.start_date || null, end_date: taskForm.end_date || null, status: taskForm.status, progress: taskForm.progress, assignee: taskForm.assignee || null, description: taskForm.description }
+                    editTask ? updateTaskMut.mutate({ id: editTask.id, data: payload }) : createTaskMut.mutate(payload)
+                  }}
+                  disabled={!taskForm.title}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xs rounded-lg font-medium"
+                >
+                  {editTask ? '更新' : '追加'}
+                </button>
+                <button onClick={() => { setShowTaskForm(false); setEditTask(null); resetForm() }} className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs rounded-lg">キャンセル</button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -1029,6 +1357,7 @@ function OvertimeDashboardPanel() {
                 <th className="text-left px-4 py-3 font-medium">社員番号</th>
                 <th className="text-left px-4 py-3 font-medium">氏名</th>
                 <th className="text-left px-4 py-3 font-medium">部署</th>
+                <th className="text-left px-4 py-3 font-medium">代表者</th>
                 <th className="text-right px-4 py-3 font-medium">月間残業(h)</th>
                 <th className="text-right px-4 py-3 font-medium">年間残業(h)</th>
                 <th className="text-center px-4 py-3 font-medium">状態</th>
@@ -1042,6 +1371,7 @@ function OvertimeDashboardPanel() {
                     <td className="px-4 py-3 text-gray-500">{emp.employee_number}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">{emp.full_name}</td>
                     <td className="px-4 py-3 text-gray-600">{emp.department}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{emp.representative || '—'}</td>
                     <td className="px-4 py-3 text-right font-mono">{emp.monthly_overtime_hours}</td>
                     <td className="px-4 py-3 text-right font-mono">{emp.annual_overtime_hours}</td>
                     <td className="px-4 py-3 text-center">
@@ -1053,7 +1383,7 @@ function OvertimeDashboardPanel() {
                 )
               })}
               {employees.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">データがありません</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">データがありません</td></tr>
               )}
             </tbody>
           </table>

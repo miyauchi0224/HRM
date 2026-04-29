@@ -12,10 +12,11 @@ from rest_framework.response import Response
 from django.http import HttpResponse
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
-from .models import AttendanceRecord, AttendanceProjectRecord, AttendanceModRequest, Project
+from .models import AttendanceRecord, AttendanceProjectRecord, AttendanceModRequest, Project, ProjectTask
 from .serializers import (
     AttendanceRecordSerializer, ClockInSerializer, ClockOutSerializer,
-    AttendanceModRequestSerializer, ProjectSerializer, AttendanceSummarySerializer
+    AttendanceModRequestSerializer, ProjectSerializer, AttendanceSummarySerializer,
+    ProjectTaskSerializer,
 )
 from apps.notifications.models import Notification
 from apps.common.mixins import SoftDeleteViewSetMixin
@@ -34,12 +35,164 @@ class ProjectViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     POST /api/v1/attendance/projects/         - 作成
     PATCH /api/v1/attendance/projects/{id}/   - 更新
     DELETE /api/v1/attendance/projects/{id}/  - 削除（論理削除）
+    GET /api/v1/attendance/projects/{id}/gantt/ - ガントチャートデータ
     """
     serializer_class   = ProjectSerializer
     permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
-        return Project.objects.filter(is_active=True)
+        return Project.objects.prefetch_related('tasks').filter(is_active=True)
+
+    @action(detail=True, methods=['get'], url_path='gantt')
+    def gantt(self, request, pk=None):
+        """プロジェクト＋タスク一覧（ガントチャート用）"""
+        project = self.get_object()
+        tasks = ProjectTask.objects.filter(project=project).select_related('assignee')
+        return Response({
+            'project': ProjectSerializer(project, context={'request': request}).data,
+            'tasks': ProjectTaskSerializer(tasks, many=True, context={'request': request}).data,
+        })
+
+    @action(detail=True, methods=['get'], url_path='template-csv')
+    def template_csv(self, request, pk=None):
+        """タスクのCSVテンプレートをダウンロード"""
+        project = self.get_object()
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['タスク名', '担当者社員番号', 'ステータス', '開始予定日(YYYY-MM-DD)', '終了予定日(YYYY-MM-DD)', '進捗率(0-100)', '表示順', '詳細'])
+        # 既存タスクをサンプルとして出力
+        for task in ProjectTask.objects.filter(project=project).select_related('assignee'):
+            writer.writerow([
+                task.title,
+                task.assignee.employee_number if task.assignee else '',
+                task.status,
+                task.start_date or '',
+                task.end_date or '',
+                task.progress,
+                task.order,
+                task.description,
+            ])
+        content = '﻿' + output.getvalue()
+        response = HttpResponse(content, content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = f'attachment; filename="tasks_{project.code}.csv"'
+        return response
+
+    @action(detail=True, methods=['post'], url_path='import-tasks',
+            parser_classes=[MultiPartParser, FormParser])
+    def import_tasks(self, request, pk=None):
+        """タスクのCSV一括登録"""
+        project = self.get_object()
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': 'ファイルが必要です'}, status=status.HTTP_400_BAD_REQUEST)
+        decoded = file.read().decode('utf-8-sig')
+        reader = csv.DictReader(io.StringIO(decoded))
+        from apps.employees.models import Employee
+        created = 0
+        errors = []
+        for i, row in enumerate(reader, 1):
+            try:
+                assignee = None
+                emp_no = row.get('担当者社員番号', '').strip()
+                if emp_no:
+                    assignee = Employee.objects.filter(employee_number=emp_no).first()
+                ProjectTask.objects.create(
+                    project=project,
+                    title=row.get('タスク名', '').strip(),
+                    assignee=assignee,
+                    status=row.get('ステータス', 'todo').strip() or 'todo',
+                    start_date=row.get('開始予定日(YYYY-MM-DD)', '').strip() or None,
+                    end_date=row.get('終了予定日(YYYY-MM-DD)', '').strip() or None,
+                    progress=int(row.get('進捗率(0-100)', 0) or 0),
+                    order=int(row.get('表示順', i) or i),
+                    description=row.get('詳細', '').strip(),
+                )
+                created += 1
+            except Exception as e:
+                errors.append({'row': i, 'error': str(e)})
+        return Response({'created': created, 'errors': errors})
+
+
+    @action(detail=False, methods=['get'], url_path='projects-template-csv')
+    def projects_template_csv(self, request):
+        """プロジェクト一括登録用CSVテンプレートダウンロード"""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['件番', 'プロジェクト名', '主管理者社員番号', '従管理者社員番号（複数はセミコロン区切り）', '開始日(YYYY-MM-DD)', '終了日(YYYY-MM-DD)', '概要'])
+        writer.writerow(['PJ001', 'サンプルプロジェクト', 'EMP001', 'EMP002;EMP003', '2026-04-01', '2026-09-30', 'プロジェクト概要'])
+        content = '﻿' + output.getvalue()
+        response = HttpResponse(content, content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="projects_template.csv"'
+        return response
+
+    @action(detail=False, methods=['post'], url_path='import-projects',
+            parser_classes=[MultiPartParser, FormParser])
+    def import_projects(self, request):
+        """プロジェクトのCSV一括登録"""
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': 'ファイルが必要です'}, status=status.HTTP_400_BAD_REQUEST)
+        decoded = file.read().decode('utf-8-sig')
+        reader = csv.DictReader(io.StringIO(decoded))
+        from apps.employees.models import Employee
+        created = 0
+        updated = 0
+        errors = []
+        for i, row in enumerate(reader, 1):
+            try:
+                code = row.get('件番', '').strip()
+                name = row.get('プロジェクト名', '').strip()
+                if not code or not name:
+                    errors.append({'row': i, 'error': '件番・プロジェクト名は必須です'})
+                    continue
+                # 主管理者
+                manager = None
+                main_emp_no = row.get('主管理者社員番号', '').strip()
+                if main_emp_no:
+                    manager = Employee.objects.filter(employee_number=main_emp_no).first()
+                # 従管理者
+                sub_ids = []
+                sub_emp_nos = row.get('従管理者社員番号（複数はセミコロン区切り）', '').strip()
+                if sub_emp_nos:
+                    for emp_no in sub_emp_nos.split(';'):
+                        emp = Employee.objects.filter(employee_number=emp_no.strip()).first()
+                        if emp:
+                            sub_ids.append(emp.id)
+                start_date = row.get('開始日(YYYY-MM-DD)', '').strip() or None
+                end_date   = row.get('終了日(YYYY-MM-DD)', '').strip() or None
+                description = row.get('概要', '').strip()
+                proj, is_new = Project.objects.update_or_create(
+                    code=code,
+                    defaults={
+                        'name': name,
+                        'manager': manager,
+                        'start_date': start_date,
+                        'end_date': end_date,
+                        'description': description,
+                    }
+                )
+                if sub_ids:
+                    proj.sub_managers.set(sub_ids)
+                if is_new:
+                    created += 1
+                else:
+                    updated += 1
+            except Exception as e:
+                errors.append({'row': i, 'error': str(e)})
+        return Response({'created': created, 'updated': updated, 'errors': errors})
+
+
+class ProjectTaskViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
+    """プロジェクトタスク（チケット）CRUD"""
+    serializer_class   = ProjectTaskSerializer
+    permission_classes = [IsNotCustomer]
+
+    def get_queryset(self):
+        qs = ProjectTask.objects.select_related('project', 'assignee').all()
+        project_id = self.request.query_params.get('project')
+        if project_id:
+            qs = qs.filter(project_id=project_id)
+        return qs
 
 
 class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
@@ -112,11 +265,12 @@ class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
                             status=status.HTTP_404_NOT_FOUND)
         today    = date.today()
         record   = AttendanceRecord.objects.filter(
-            employee=employee, date=today, clock_out__isnull=True
+            employee=employee, date=today
         ).first()
 
         if not record:
-            return Response({'error': '出勤記録がありません'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': '出勤記録がありません。先に出勤打刻を行ってください。'},
+                            status=status.HTTP_404_NOT_FOUND)
 
         now_time = timezone.localtime().time()
         record.clock_out          = now_time
@@ -219,7 +373,14 @@ class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         year, month = map(int, year_month.split('-'))
 
         from apps.employees.models import Employee
-        employees = Employee.objects.select_related('user').all()
+        employees = Employee.objects.select_related('user').prefetch_related('managers').all()
+
+        # 部署ごとの代表者（最初のmanager）を事前構築
+        dept_representative: dict = {}
+        for emp in employees:
+            managers = list(emp.managers.all())
+            if managers and emp.department not in dept_representative:
+                dept_representative[emp.department] = managers[0].full_name
 
         result = []
         for emp in employees:
@@ -244,6 +405,7 @@ class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
                 'employee_number':         emp.employee_number,
                 'full_name':               emp.full_name,
                 'department':              emp.department,
+                'representative':          dept_representative.get(emp.department, ''),
                 'monthly_overtime_hours':  round(monthly_ot / 60, 1),
                 'annual_overtime_hours':   round(annual_ot / 60, 1),
                 'risk_level':              risk,

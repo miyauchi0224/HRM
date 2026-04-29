@@ -3,9 +3,19 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { Receipt, Plus, X, Upload, Download } from 'lucide-react'
+import { Receipt, Plus, X, Upload, Download, Paperclip, Image as ImageIcon, File } from 'lucide-react'
 
 interface AccountItem { id: string; code: string; name: string; category: string }
+
+interface AttachmentItem {
+  id: string
+  file: string
+  file_name: string
+  file_size: number
+  content_type: string
+  uploaded_at: string
+}
+
 interface ExpenseRequest {
   id: string
   expense_date: string
@@ -14,6 +24,7 @@ interface ExpenseRequest {
   description: string
   status: 'pending' | 'approved' | 'rejected' | 'cancelled'
   created_at: string
+  attachments: AttachmentItem[]
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -25,13 +36,22 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 const ACCOUNTING_ROLES = ['hr', 'accounting', 'admin']
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+
 export default function ExpensePage() {
   const user         = useAuthStore((s) => s.user)
   const isAccounting = ACCOUNTING_ROLES.includes(user?.role ?? '')
   const [showNew, setShowNew]           = useState(false)
   const [uploading, setUploading]       = useState(false)
   const [uploadResult, setUploadResult] = useState<any>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [expandedId, setExpandedId]     = useState<string | null>(null)
+  const [attachUploading, setAttachUploading] = useState<string | null>(null)
+  const fileRef    = useRef<HTMLInputElement>(null)
+  const attachRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const qc = useQueryClient()
 
   const { data: requests = [], isLoading } = useQuery<ExpenseRequest[]>({
@@ -41,6 +61,12 @@ export default function ExpensePage() {
 
   const cancelMut = useMutation({
     mutationFn: (id: string) => api.patch(`/api/v1/expense/requests/${id}/`, { status: 'cancelled' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['expense-requests'] }),
+  })
+
+  const deleteAttachMut = useMutation({
+    mutationFn: ({ reqId, attachId }: { reqId: string; attachId: string }) =>
+      api.delete(`/api/v1/expense/requests/${reqId}/attachments/${attachId}/`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['expense-requests'] }),
   })
 
@@ -72,6 +98,35 @@ export default function ExpensePage() {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
     }
+  }
+
+  const uploadAttachment = async (reqId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAttachUploading(reqId)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      await api.post(`/api/v1/expense/requests/${reqId}/attachments/`, form)
+      qc.invalidateQueries({ queryKey: ['expense-requests'] })
+    } catch {
+      alert('ファイルのアップロードに失敗しました')
+    } finally {
+      setAttachUploading(null)
+      const ref = attachRefs.current[reqId]
+      if (ref) ref.value = ''
+    }
+  }
+
+  const downloadAttachment = async (reqId: string, attachId: string, fileName: string) => {
+    const res = await api.get(
+      `/api/v1/expense/requests/${reqId}/attachments/${attachId}/download/`,
+      { responseType: 'blob' }
+    )
+    const a = document.createElement('a')
+    a.href = window.URL.createObjectURL(new Blob([res.data]))
+    a.download = fileName
+    a.click()
   }
 
   return (
@@ -162,32 +217,51 @@ export default function ExpensePage() {
         ) : requests.length === 0 ? (
           <p className="text-center text-gray-400 text-sm py-10">申請履歴がありません</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-gray-400 text-xs border-b border-gray-100">
-                <th className="text-left px-5 py-3 font-medium">日付</th>
-                <th className="text-left px-5 py-3 font-medium">勘定科目</th>
-                <th className="text-left px-5 py-3 font-medium">金額</th>
-                <th className="text-left px-5 py-3 font-medium">説明</th>
-                <th className="text-left px-5 py-3 font-medium">状態</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((req) => {
-                const st = STATUS_CONFIG[req.status]
-                return (
-                  <tr key={req.id} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-5 py-3 text-gray-600">{req.expense_date}</td>
-                    <td className="px-5 py-3 text-gray-700">{req.account_item?.name ?? '—'}</td>
-                    <td className="px-5 py-3 font-medium text-gray-800">¥{req.amount.toLocaleString()}</td>
-                    <td className="px-5 py-3 text-gray-500 max-w-xs truncate">{req.description || '—'}</td>
-                    <td className="px-5 py-3">
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${st.color}`}>
-                        {st.label}
+          <div className="divide-y divide-gray-50">
+            {requests.map((req) => {
+              const st = STATUS_CONFIG[req.status]
+              const isExpanded = expandedId === req.id
+              return (
+                <div key={req.id}>
+                  {/* メイン行 */}
+                  <div className="flex items-center gap-2 px-5 py-3 hover:bg-gray-50">
+                    <div className="flex-1 grid grid-cols-5 gap-2 text-sm">
+                      <span className="text-gray-600">{req.expense_date}</span>
+                      <span className="text-gray-700">{req.account_item?.name ?? '—'}</span>
+                      <span className="font-medium text-gray-800">¥{req.amount.toLocaleString()}</span>
+                      <span className="text-gray-500 truncate">{req.description || '—'}</span>
+                      <span>
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${st.color}`}>
+                          {st.label}
+                        </span>
                       </span>
-                    </td>
-                    <td className="px-5 py-3">
+                    </div>
+                    {/* 添付ファイルボタン */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {req.attachments?.length > 0 && (
+                        <button
+                          onClick={() => setExpandedId(isExpanded ? null : req.id)}
+                          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          <Paperclip size={13} />
+                          {req.attachments.length}件
+                        </button>
+                      )}
+                      <label className={`flex items-center gap-1 text-xs px-2 py-1 rounded border cursor-pointer transition-colors ${
+                        attachUploading === req.id
+                          ? 'border-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+                      }`}>
+                        <Paperclip size={12} />
+                        {attachUploading === req.id ? '...' : '添付'}
+                        <input
+                          type="file"
+                          className="hidden"
+                          disabled={attachUploading === req.id}
+                          ref={(el) => { attachRefs.current[req.id] = el }}
+                          onChange={(e) => uploadAttachment(req.id, e)}
+                        />
+                      </label>
                       {req.status === 'pending' && (
                         <button
                           onClick={() => confirm('取り消しますか？') && cancelMut.mutate(req.id)}
@@ -196,12 +270,50 @@ export default function ExpensePage() {
                           <X size={12} /> 取消
                         </button>
                       )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                    </div>
+                  </div>
+
+                  {/* 添付ファイル展開エリア */}
+                  {isExpanded && req.attachments?.length > 0 && (
+                    <div className="bg-gray-50 px-8 py-3 border-t border-gray-100">
+                      <p className="text-xs font-medium text-gray-500 mb-2">添付ファイル</p>
+                      <div className="flex flex-wrap gap-3">
+                        {req.attachments.map((att) => {
+                          const isImage = att.content_type.startsWith('image/')
+                          return (
+                            <div key={att.id}
+                              className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs">
+                              {isImage ? (
+                                <ImageIcon size={14} className="text-blue-400 shrink-0" />
+                              ) : (
+                                <File size={14} className="text-gray-400 shrink-0" />
+                              )}
+                              <span className="text-gray-700 max-w-[160px] truncate">{att.file_name}</span>
+                              <span className="text-gray-400">{formatFileSize(att.file_size)}</span>
+                              <button
+                                onClick={() => downloadAttachment(req.id, att.id, att.file_name)}
+                                className="text-blue-500 hover:text-blue-700 ml-1"
+                                title="ダウンロード"
+                              >
+                                <Download size={13} />
+                              </button>
+                              <button
+                                onClick={() => confirm('削除しますか？') && deleteAttachMut.mutate({ reqId: req.id, attachId: att.id })}
+                                className="text-gray-300 hover:text-red-400 ml-1"
+                                title="削除"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
 

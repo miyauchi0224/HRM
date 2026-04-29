@@ -1,6 +1,10 @@
+import csv
+import io
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
+from django.http import HttpResponse
 from apps.accounts.permissions import IsNotCustomer, IsHR
 from apps.common.mixins import SoftDeleteViewSetMixin
 from apps.notifications.models import Notification
@@ -20,9 +24,23 @@ class StressCheckPeriodViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         return qs
 
     def get_permissions(self):
-        if self.action in ('create', 'update', 'partial_update', 'destroy', 'publish'):
+        if self.action in ('create', 'update', 'partial_update', 'destroy', 'publish',
+                           'template_csv', 'import_questions'):
             return [IsHR()]
         return [IsNotCustomer()]
+
+    @action(detail=False, methods=['get'], url_path='template-csv')
+    def template_csv(self, request):
+        """質問項目のCSVテンプレートをダウンロード"""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['order', 'section', 'text', 'reverse'])
+        for q in STRESS_CHECK_QUESTIONS:
+            writer.writerow([q['order'], q['section'], q['text'], str(q['reverse']).lower()])
+        content = '﻿' + output.getvalue()
+        response = HttpResponse(content, content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="stress_check_template.csv"'
+        return response
 
     @action(detail=True, methods=['post'], url_path='publish')
     def publish(self, request, pk=None):

@@ -4,16 +4,40 @@ from apps.employees.models import Employee
 from apps.common.models import SoftDeleteModel
 
 
-class Project(SoftDeleteModel):
-    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code       = models.CharField(max_length=50, unique=True, verbose_name='件番')
-    name       = models.CharField(max_length=200, verbose_name='プロジェクト名')
-    manager    = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True,
-                                   related_name='managed_projects', verbose_name='管理者')
-    is_active  = models.BooleanField(default=True)
-    start_date = models.DateField(null=True, blank=True)
-    end_date   = models.DateField(null=True, blank=True)
+class ProjectManager(SoftDeleteModel):
+    """プロジェクトの管理者（主・従）を管理する中間モデル"""
+    class Role(models.TextChoices):
+        PRIMARY = 'primary', '主管理者'
+        SECONDARY = 'secondary', '従管理者'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey('Project', on_delete=models.CASCADE, related_name='project_managers')
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='managed_project_roles')
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.SECONDARY, verbose_name='役割')
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'プロジェクト管理者'
+        unique_together = ('project', 'employee')
+        ordering = ['role', 'created_at']
+
+    def __str__(self):
+        return f'{self.project.code} - {self.employee.full_name} ({self.get_role_display()})'
+
+
+class Project(SoftDeleteModel):
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code        = models.CharField(max_length=50, unique=True, verbose_name='件番')
+    name        = models.CharField(max_length=200, verbose_name='プロジェクト名')
+    description = models.TextField(blank=True, verbose_name='概要')
+    manager      = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True,
+                                     related_name='managed_projects', verbose_name='主管理者')
+    sub_managers = models.ManyToManyField(Employee, blank=True,
+                                          related_name='sub_managed_projects', verbose_name='従管理者')
+    is_active    = models.BooleanField(default=True)
+    start_date  = models.DateField(null=True, blank=True)
+    end_date    = models.DateField(null=True, blank=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = 'プロジェクト'
@@ -21,6 +45,46 @@ class Project(SoftDeleteModel):
 
     def __str__(self):
         return f'{self.code} {self.name}'
+
+    @property
+    def primary_managers(self):
+        """主管理者一覧を取得（M2M対応）"""
+        return self.project_managers.filter(role=ProjectManager.Role.PRIMARY).select_related('employee')
+
+    @property
+    def secondary_managers(self):
+        """従管理者一覧を取得（M2M対応）"""
+        return self.project_managers.filter(role=ProjectManager.Role.SECONDARY).select_related('employee')
+
+
+class ProjectTask(SoftDeleteModel):
+    """プロジェクトチケット（作業項目）"""
+    class Status(models.TextChoices):
+        TODO       = 'todo',       '未着手'
+        IN_PROGRESS= 'in_progress','進行中'
+        REVIEW     = 'review',     'レビュー中'
+        DONE       = 'done',       '完了'
+
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project     = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks',
+                                    verbose_name='プロジェクト')
+    title       = models.CharField(max_length=200, verbose_name='タスク名')
+    description = models.TextField(blank=True, verbose_name='詳細')
+    assignee    = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='assigned_tasks', verbose_name='担当者')
+    status      = models.CharField(max_length=20, choices=Status.choices, default=Status.TODO)
+    start_date  = models.DateField(null=True, blank=True, verbose_name='開始予定日')
+    end_date    = models.DateField(null=True, blank=True, verbose_name='終了予定日')
+    progress    = models.PositiveSmallIntegerField(default=0, verbose_name='進捗率(%)')
+    order       = models.PositiveIntegerField(default=0, verbose_name='表示順')
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'プロジェクトタスク'
+        ordering     = ['order', 'start_date']
+
+    def __str__(self):
+        return f'{self.project.code} - {self.title}'
 
 
 class WorkRule(SoftDeleteModel):

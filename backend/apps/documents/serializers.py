@@ -43,6 +43,7 @@ class DocumentSerializer(serializers.ModelSerializer):
     target_employee_name = serializers.CharField(
         source='target_employee.full_name', read_only=True, default=None
     )
+    target_project_name = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True, default=None)
     latest_file = DocumentFileSerializer(read_only=True)
     file_count = serializers.SerializerMethodField()
@@ -51,10 +52,16 @@ class DocumentSerializer(serializers.ModelSerializer):
         model = Document
         fields = [
             'id', 'title', 'category', 'category_name', 'target_employee',
-            'target_employee_name', 'visibility', 'description',
+            'target_employee_name', 'target_project', 'target_project_name',
+            'visibility', 'description',
             'created_by_name', 'created_at', 'updated_at', 'latest_file', 'file_count',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_file_count(self, obj):
         return obj.files.count()
+
+    def get_target_project_name(self, obj):
+        if obj.target_project:
+            return f'{obj.target_project.code} {obj.target_project.name}'
+        return None

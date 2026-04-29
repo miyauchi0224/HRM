@@ -1,3 +1,46 @@
+# 実装完了事項（2026-04-29）
+
+## カレンダー機能 - DB永続化・エクスポート・ローカル保存対応
+
+### バックエンド（calendar_sync/views.py）
+- ✅ `events()` エンドポイント：DB保存済みイベント + 外部カレンダー（MS/Google）をマージして返却
+- ✅ `create_event()` 修正：
+  - provider='local'/'ms'/'google' の3パターンに対応
+  - DB に CalendarEvent を保存
+  - provider指定時は optional で外部カレンダー同期（同期未設定でも DB保存は成功）
+- ✅ `update_event()` 修正：
+  - DB の CalendarEvent を先に更新
+  - 外部カレンダー（external_id 存在時）も更新
+  - provider='local' でも動作（DB のみ更新）
+- ✅ `delete_event()` 修正：
+  - DB から削除（soft delete）
+  - 外部カレンダーがあれば同期削除
+- ✅ `export_events()` エンドポイント：
+  - format=csv または format=ics でエクスポート
+  - 年月フィルタリング対応
+  - CSV：タイトル, 開始日時, 終了日時, プロバイダー, 作成日
+  - ICS：RFC 5545 準拠
+
+### フロントエンド（CalendarPanel.tsx）
+- ✅ provider 型を 'ms' | 'google' | 'local' に拡張
+- ✅ 新規予定作成時：provider をセレクトボックスで選択（デフォルト='local'）
+- ✅ ダブルクリック予定追加：provider選択なし、モーダルで選択
+- ✅ イベント色分け：
+  - Microsoft: 青（#3b82f6）
+  - Google: 紫（#8b5cf6）
+  - Local: 緑（#10b981）
+- ✅ エクスポート機能：
+  - CSV/ICS ボタンを追加（ヘッダー）
+  - 年月でフィルタ
+  - ブラウザダウンロード実装
+- ✅ 凡例にローカルカレンダー追加
+
+## 仕様
+- **ローカル保存**: MS/Google 連携なしでも DB にイベント保存可能
+- **外部同期オプション**: トークン存在時のみ同期（トークン未設定でも機能停止しない）
+- **エクスポート**: 現在表示月のイベントを CSV/ICS で一括ダウンロード
+
+---
 
 # 人事管理HRM
 
@@ -957,7 +1000,75 @@ CREATE TABLE compliance_checklistprogress (
 4. **定期通知**: 月1回リマインダー通知
 5. **監査ログ**: 誰がいつ何を完了したかを詳細記録
 
+---
 
+# ✅ 2026-04-29 カレンダー機能の完成
+
+## 実装完了した機能
+
+### 1. 祝日表示（holidays ライブラリ）
+- `jpholiday` → `holidays` に変更
+- API: `GET /api/v1/calendar/holidays/?year=YYYY&month=MM`
+- 日本の祝日を赤色で表示
+
+### 2. カレンダーの日付色分け
+- **土曜日**: 青色背景 + 青色テキスト
+- **日曜日**: 赤色背景 + 赤色テキスト
+- 祝日: 赤色イベント表示
+
+### 3. 日付ダブルクリック → 予定追加
+- `dayCellDidMount` でクリックハンドラー追加
+- 300ms以内の2回クリックでダブルクリック判定
+- 予定追加モーダル表示
+- バックエンド: `POST /api/v1/calendar/events/create/`
+
+### 4. 予定クリック → 編集・削除
+- 予定をクリックで編集モーダル表示
+- タイトル・開始時刻・終了時刻を編集可能
+- 削除ボタン（確認ダイアログ付き）
+- バックエンド: 
+  - `POST /api/v1/calendar/events/update_event/`
+  - `POST /api/v1/calendar/events/delete_event/`
+
+### 5. Microsoft/Google カレンダー同期
+- OAuth スコープ: `Calendars.ReadWrite` / `calendar`
+- トークン管理: `UserCalendarToken` モデル
+- イベント自動同期
+
+## API エンドポイント一覧
+
+```
+GET   /api/v1/calendar/holidays/               → 祝日一覧
+GET   /api/v1/calendar/events/                 → カレンダーイベント
+GET   /api/v1/calendar/oauth/ms/start/         → Microsoft 認証開始
+GET   /api/v1/calendar/oauth/ms/callback/      → Microsoft コールバック
+GET   /api/v1/calendar/oauth/google/start/     → Google 認証開始
+GET   /api/v1/calendar/oauth/google/callback/  → Google コールバック
+GET   /api/v1/calendar/tokens/                 → 連携プロバイダー一覧
+POST  /api/v1/calendar/events/create/          → 予定作成
+POST  /api/v1/calendar/events/update_event/    → 予定更新
+POST  /api/v1/calendar/events/delete_event/    → 予定削除
+POST  /api/v1/calendar/oauth/revoke/           → 連携解除
+```
+
+## トラブルシューティング
+
+**エラー**: ChunkLoadError
+- 原因: Next.js ビルドキャッシュ破損
+- 解決: 
+  ```bash
+  rm -r .next node_modules package-lock.json
+  npm install
+  npm run dev
+  ```
+
+**エラー**: Unknown option 'dateClick'
+- 原因: dayGridPlugin が dateClick をサポートしていない
+- 解決: `dayCellDidMount` でクリックハンドラーを直接追加
+
+
+#
+一人の社員が複数のロールに登録可能。
 
 
 

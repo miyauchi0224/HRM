@@ -1,11 +1,13 @@
 from django.utils import timezone
+from django.http import FileResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
 
-from .models import ApprovalRequest, ApprovalStep, ApprovalTemplate
-from .serializers import ApprovalRequestSerializer, ApprovalTemplateSerializer
+from .models import ApprovalRequest, ApprovalStep, ApprovalTemplate, ApprovalAttachment
+from .serializers import ApprovalRequestSerializer, ApprovalTemplateSerializer, ApprovalAttachmentSerializer
 from apps.notifications.models import Notification
 from apps.accounts.permissions import IsNotCustomer
 from apps.common.mixins import SoftDeleteViewSetMixin
@@ -169,3 +171,55 @@ class ApprovalRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         obj.status = ApprovalRequest.Status.WITHDRAWN
         obj.save()
         return Response(ApprovalRequestSerializer(obj).data)
+
+    @action(detail=True, methods=['post'], url_path='attachments',
+            parser_classes=[MultiPartParser, FormParser])
+    def upload_attachment(self, request, pk=None):
+        """
+        POST /api/v1/approval/requests/{id}/attachments/
+        見積書などのファイルをアップロード
+        """
+        obj = self.get_object()
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': 'ファイルが指定されていません'}, status=status.HTTP_400_BAD_REQUEST)
+
+        attach = ApprovalAttachment.objects.create(
+            request      = obj,
+            file         = file,
+            file_name    = file.name,
+            file_size    = file.size,
+            content_type = file.content_type or 'application/octet-stream',
+            uploaded_by  = request.user,
+        )
+        return Response(ApprovalAttachmentSerializer(attach).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['delete'], url_path='attachments/(?P<attach_id>[^/.]+)')
+    def delete_attachment(self, request, pk=None, attach_id=None):
+        """
+        DELETE /api/v1/approval/requests/{id}/attachments/{attach_id}/
+        添付ファイルを削除
+        """
+        obj = self.get_object()
+        try:
+            attach = ApprovalAttachment.objects.get(id=attach_id, request=obj)
+        except ApprovalAttachment.DoesNotExist:
+            return Response({'error': '添付ファイルが見つかりません'}, status=status.HTTP_404_NOT_FOUND)
+        attach.file.delete(save=False)
+        attach.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['get'], url_path='attachments/(?P<attach_id>[^/.]+)/download')
+    def download_attachment(self, request, pk=None, attach_id=None):
+        """
+        GET /api/v1/approval/requests/{id}/attachments/{attach_id}/download/
+        添付ファイルをダウンロード
+        """
+        obj = self.get_object()
+        try:
+            attach = ApprovalAttachment.objects.get(id=attach_id, request=obj)
+        except ApprovalAttachment.DoesNotExist:
+            return Response({'error': '添付ファイルが見つかりません'}, status=status.HTTP_404_NOT_FOUND)
+        response = FileResponse(attach.file.open('rb'), content_type=attach.content_type)
+        response['Content-Disposition'] = f'attachment; filename="{attach.file_name}"'
+        return response

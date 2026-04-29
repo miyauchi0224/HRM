@@ -63,3 +63,27 @@ class ExpenseRequest(SoftDeleteModel):
     class Meta:
         verbose_name = '経費申請'
         ordering     = ['-created_at']
+
+    def __str__(self):
+        return f'{self.applicant} - ¥{self.amount}'
+
+
+class ExpenseAttachment(SoftDeleteModel):
+    id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    request      = models.ForeignKey(ExpenseRequest, on_delete=models.CASCADE, related_name='attachments')
+    file         = models.FileField(upload_to='expense/receipts/%Y/%m/', verbose_name='ファイル')
+    file_name    = models.CharField(max_length=255)
+    file_size    = models.PositiveIntegerField()
+    content_type = models.CharField(max_length=100)
+    uploaded_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '経費領収書'
+        ordering     = ['uploaded_at']
+
+    def __str__(self):
+        return f'{self.request} - {self.file_name}'
+
+    @property
+    def is_image(self):
+        return self.content_type.startswith('image/')

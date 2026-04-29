@@ -4,12 +4,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
-import { Calendar, Unlink, X } from 'lucide-react'
+import { Calendar, Unlink, X, Download } from 'lucide-react'
 
 interface NewEventData {
   date: string
   title: string
-  provider: 'ms' | 'google'
+  provider: 'ms' | 'google' | 'local'
 }
 
 interface EditEventData {
@@ -17,7 +17,7 @@ interface EditEventData {
   title: string
   start: string
   end: string
-  provider: 'ms' | 'google'
+  provider: 'ms' | 'google' | 'local'
   url?: string
 }
 
@@ -27,10 +27,12 @@ export default function CalendarPanel() {
   const [revoking, setRevoking] = useState<string | null>(null)
   const [newEventModal, setNewEventModal] = useState<NewEventData | null>(null)
   const [eventTitle, setEventTitle] = useState('')
+  const [selectedProvider, setSelectedProvider] = useState<'ms' | 'google' | 'local'>('local')
   const [editEventModal, setEditEventModal] = useState<EditEventData | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editStart, setEditStart] = useState('')
   const [editEnd, setEditEnd] = useState('')
+  const [exporting, setExporting] = useState(false)
   const qc = useQueryClient()
 
   // 祝日取得
@@ -75,8 +77,8 @@ export default function CalendarPanel() {
       title: e.title,
       start: e.start,
       end: e.end,
-      backgroundColor: e.provider === 'microsoft' ? '#3b82f6' : '#8b5cf6',
-      borderColor: e.provider === 'microsoft' ? '#1d4ed8' : '#6d28d9',
+      backgroundColor: e.provider === 'microsoft' ? '#3b82f6' : e.provider === 'google' ? '#8b5cf6' : '#10b981',
+      borderColor: e.provider === 'microsoft' ? '#1d4ed8' : e.provider === 'google' ? '#6d28d9' : '#059669',
       url: e.url,
       extendedProps: { provider: e.provider },
     })),
@@ -103,12 +105,13 @@ export default function CalendarPanel() {
   }
 
   const createEventMutation = useMutation({
-    mutationFn: (data: { title: string; date: string; provider: 'ms' | 'google' }) =>
+    mutationFn: (data: { title: string; date: string; provider: 'ms' | 'google' | 'local' }) =>
       api.post('/api/v1/calendar/events/create/', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['calendar-events'] })
       setNewEventModal(null)
       setEventTitle('')
+      setSelectedProvider('local')
     },
     onError: () => {
       alert('予定の追加に失敗しました')
@@ -118,7 +121,7 @@ export default function CalendarPanel() {
   const updateEventMutation = useMutation({
     mutationFn: (data: {
       event_id: string
-      provider: 'ms' | 'google'
+      provider: 'ms' | 'google' | 'local'
       title: string
       start: string
       end: string
@@ -136,7 +139,7 @@ export default function CalendarPanel() {
   })
 
   const deleteEventMutation = useMutation({
-    mutationFn: (data: { event_id: string; provider: 'ms' | 'google' }) =>
+    mutationFn: (data: { event_id: string; provider: 'ms' | 'google' | 'local' }) =>
       api.post('/api/v1/calendar/events/delete_event/', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['calendar-events'] })
@@ -147,12 +150,31 @@ export default function CalendarPanel() {
     },
   })
 
-  const handleDateDblClick = (date: string, provider: 'ms' | 'google') => {
-    if (providers.includes(provider)) {
-      setNewEventModal({ date, title: '', provider })
-      setEventTitle('')
-    } else {
-      alert(`${provider === 'ms' ? 'Microsoft' : 'Google'} カレンダーを同期してください`)
+  const handleDateDblClick = (date: string) => {
+    // デフォルトは 'local' provider
+    setNewEventModal({ date, title: '', provider: 'local' })
+    setEventTitle('')
+    setSelectedProvider('local')
+  }
+
+  const handleExport = async (format: 'csv' | 'ics') => {
+    setExporting(true)
+    try {
+      const response = await api.get(
+        `/api/v1/calendar/events/export/?format=${format}&year=${year}&month=${month}`,
+        { responseType: 'blob' }
+      )
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `calendar_events.${format === 'ics' ? 'ics' : 'csv'}`)
+      document.body.appendChild(link)
+      link.click()
+      link.parentNode?.removeChild(link)
+    } catch (error) {
+      alert('エクスポートに失敗しました')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -161,7 +183,7 @@ export default function CalendarPanel() {
     createEventMutation.mutate({
       title: eventTitle,
       date: newEventModal.date,
-      provider: newEventModal.provider,
+      provider: selectedProvider,
     })
   }
 
@@ -185,8 +207,25 @@ export default function CalendarPanel() {
           <Calendar className="text-blue-600" size={22} />
           <h2 className="text-lg font-bold text-gray-800">カレンダー</h2>
         </div>
-        <div className="flex gap-2">
-          {!providers.includes('ms') && (
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => handleExport('csv')}
+            disabled={exporting}
+            className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 text-white text-xs rounded-lg font-medium transition-colors"
+            title="CSVでエクスポート"
+          >
+            {exporting ? 'エクスポート中...' : 'CSV'}
+          </button>
+          <button
+            onClick={() => handleExport('ics')}
+            disabled={exporting}
+            className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 text-white text-xs rounded-lg font-medium transition-colors"
+            title="ICSでエクスポート"
+          >
+            {exporting ? 'エクスポート中...' : 'ICS'}
+          </button>
+          <div className="flex gap-2">
+            {!providers.includes('ms') && (
             <button
               onClick={() => handleOAuthStart('ms')}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition-colors"
@@ -220,6 +259,7 @@ export default function CalendarPanel() {
               <Unlink size={12} /> {revoking === 'google' ? '解除中...' : '解除'}
             </button>
           )}
+          </div>
         </div>
       </div>
 
@@ -288,11 +328,8 @@ export default function CalendarPanel() {
               } else if (clickCount === 2) {
                 clearTimeout(clickTimer)
                 clickCount = 0
-                // ダブルクリック時に予定追加
-                handleDateDblClick(
-                  dateStr,
-                  providers.includes('google') ? 'google' : providers.includes('ms') ? 'ms' : 'google'
-                )
+                // ダブルクリック時に予定追加（デフォルトは 'local'）
+                handleDateDblClick(dateStr)
               }
             }
 
@@ -332,6 +369,10 @@ export default function CalendarPanel() {
           <div className="w-3 h-3 rounded bg-purple-500" />
           <span>Google カレンダー</span>
         </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded bg-green-500" />
+          <span>ローカルカレンダー</span>
+        </div>
       </div>
 
       {/* 予定追加モーダル */}
@@ -351,24 +392,40 @@ export default function CalendarPanel() {
               </button>
             </div>
 
-            <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-2">
+            <div className="mb-4 space-y-3">
+              <p className="text-sm text-gray-600">
                 日付: <span className="font-semibold text-gray-800">{newEventModal.date}</span>
               </p>
-              <p className="text-sm text-gray-600 mb-3">
-                カレンダー: <span className="font-semibold text-gray-800">
-                  {newEventModal.provider === 'ms' ? 'Microsoft' : 'Google'}
-                </span>
-              </p>
-              <input
-                type="text"
-                placeholder="予定のタイトル"
-                value={eventTitle}
-                onChange={(e) => setEventTitle(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddEvent()}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                autoFocus
-              />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  カレンダー
+                </label>
+                <select
+                  value={selectedProvider}
+                  onChange={(e) => setSelectedProvider(e.target.value as 'ms' | 'google' | 'local')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="local">ローカル（同期なし）</option>
+                  {providers.includes('ms') && <option value="ms">Microsoft</option>}
+                  {providers.includes('google') && <option value="google">Google</option>}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  タイトル
+                </label>
+                <input
+                  type="text"
+                  placeholder="予定のタイトル"
+                  value={eventTitle}
+                  onChange={(e) => setEventTitle(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddEvent()}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autoFocus
+                />
+              </div>
             </div>
 
             <div className="flex gap-2 justify-end">

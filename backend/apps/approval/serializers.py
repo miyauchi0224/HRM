@@ -1,6 +1,16 @@
 from rest_framework import serializers
-from .models import ApprovalRequest, ApprovalStep, ApprovalTemplate
+from .models import ApprovalRequest, ApprovalStep, ApprovalTemplate, ApprovalAttachment
 from apps.employees.models import Employee
+
+
+class ApprovalAttachmentSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.CharField(source='uploaded_by.full_name', read_only=True, default=None)
+
+    class Meta:
+        model  = ApprovalAttachment
+        fields = ['id', 'file', 'file_name', 'file_size', 'content_type',
+                  'uploaded_by', 'uploaded_by_name', 'uploaded_at']
+        read_only_fields = ['id', 'uploaded_at', 'uploaded_by_name']
 
 
 class ApprovalTemplateSerializer(serializers.ModelSerializer):
@@ -22,6 +32,7 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
 class ApprovalRequestSerializer(serializers.ModelSerializer):
     applicant_name = serializers.CharField(source='applicant.full_name', read_only=True)
     steps = ApprovalStepSerializer(many=True, read_only=True)
+    file_attachments = ApprovalAttachmentSerializer(many=True, read_only=True)
     approver_ids = serializers.ListField(
         child=serializers.UUIDField(), write_only=True, required=False
     )
@@ -31,9 +42,9 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'category', 'applicant', 'applicant_name', 'template',
             'amount', 'content', 'attachments', 'status', 'submitted_at',
-            'created_at', 'updated_at', 'steps', 'approver_ids',
+            'created_at', 'updated_at', 'steps', 'approver_ids', 'file_attachments',
         ]
-        read_only_fields = ['applicant', 'status', 'submitted_at']
+        read_only_fields = ['applicant', 'status', 'submitted_at', 'file_attachments']
 
     def create(self, validated_data):
         approver_ids = validated_data.pop('approver_ids', [])

@@ -1,9 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { FileText, Plus, CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-react'
+import { FileText, Plus, CheckCircle, XCircle, Clock, ChevronRight, Paperclip, Download, X, File } from 'lucide-react'
 
 interface ApprovalStep {
   id: string
@@ -17,6 +17,15 @@ interface ApprovalStep {
   decided_at: string | null
 }
 
+interface FileAttachment {
+  id: string
+  file: string
+  file_name: string
+  file_size: number
+  content_type: string
+  uploaded_at: string
+}
+
 interface ApprovalRequest {
   id: string
   title: string
@@ -28,6 +37,13 @@ interface ApprovalRequest {
   submitted_at: string | null
   created_at: string
   steps: ApprovalStep[]
+  file_attachments: FileAttachment[]
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
 }
 
 interface DefaultStep {
@@ -64,6 +80,11 @@ export default function ApprovalPage() {
   const [selected, setSelected] = useState<ApprovalRequest | null>(null)
   const [form, setForm] = useState({ title: '', category: 'purchase', amount: '', content: '' })
   const [defaultSteps, setDefaultSteps] = useState<DefaultStep[]>([])
+  const [attachUploading, setAttachUploading] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const attachRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const newAttachRef = useRef<HTMLInputElement>(null)
 
   const { data: requests = [], isLoading } = useQuery<ApprovalRequest[]>({
     queryKey: ['approval-requests'],
@@ -77,7 +98,20 @@ export default function ApprovalPage() {
 
   const createMut = useMutation({
     mutationFn: (data: any) => api.post('/api/v1/approval/requests/', data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['approval-requests'] }); setShowNew(false); setDefaultSteps([]) },
+    onSuccess: async (res) => {
+      const reqId = res.data.id
+      // 起案時に選択されたファイルを順番にアップロード
+      for (const file of pendingFiles) {
+        const fd = new FormData()
+        fd.append('file', file)
+        try { await api.post(`/api/v1/approval/requests/${reqId}/attachments/`, fd) }
+        catch { /* silent */ }
+      }
+      setPendingFiles([])
+      qc.invalidateQueries({ queryKey: ['approval-requests'] })
+      setShowNew(false)
+      setDefaultSteps([])
+    },
   })
 
   const submitMut = useMutation({
@@ -89,12 +123,51 @@ export default function ApprovalPage() {
     mutationFn: ({ id, decision, comment }: any) =>
       api.patch(`/api/v1/approval/requests/${id}/decide/`, { decision, comment }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['approval-requests'] }); setSelected(null) },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error ?? err?.response?.data?.detail ?? '処理に失敗しました'
+      alert(msg)
+    },
   })
 
   const withdrawMut = useMutation({
     mutationFn: (id: string) => api.post(`/api/v1/approval/requests/${id}/withdraw/`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['approval-requests'] }),
   })
+
+  const deleteAttachMut = useMutation({
+    mutationFn: ({ reqId, attachId }: { reqId: string; attachId: string }) =>
+      api.delete(`/api/v1/approval/requests/${reqId}/attachments/${attachId}/`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['approval-requests'] }),
+  })
+
+  const uploadAttachment = async (reqId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAttachUploading(reqId)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      await api.post(`/api/v1/approval/requests/${reqId}/attachments/`, form)
+      qc.invalidateQueries({ queryKey: ['approval-requests'] })
+    } catch {
+      alert('ファイルのアップロードに失敗しました')
+    } finally {
+      setAttachUploading(null)
+      const ref = attachRefs.current[reqId]
+      if (ref) ref.value = ''
+    }
+  }
+
+  const downloadAttachment = async (reqId: string, attachId: string, fileName: string) => {
+    const res = await api.get(
+      `/api/v1/approval/requests/${reqId}/attachments/${attachId}/download/`,
+      { responseType: 'blob' }
+    )
+    const a = document.createElement('a')
+    a.href = window.URL.createObjectURL(new Blob([res.data]))
+    a.download = fileName
+    a.click()
+  }
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length
 
@@ -145,66 +218,127 @@ export default function ApprovalPage() {
           <div className="divide-y">
             {requests.map((req) => {
               const cfg = STATUS_CONFIG[req.status] ?? { label: req.status, color: 'bg-gray-100 text-gray-600' }
+              const isExpanded = expandedId === req.id
               return (
-                <div key={req.id} className="p-4 hover:bg-gray-50">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-1">
-                        <span className="font-semibold text-gray-800">{req.title}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
-                        <span className="text-xs text-gray-500">{CATEGORY_LABELS[req.category]}</span>
-                        {req.amount != null && (
-                          <span className="text-xs font-medium text-gray-700">¥{req.amount.toLocaleString()}</span>
+                <div key={req.id}>
+                  <div className="p-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                          <span className="font-semibold text-gray-800">{req.title}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
+                          <span className="text-xs text-gray-500">{CATEGORY_LABELS[req.category]}</span>
+                          {req.amount != null && (
+                            <span className="text-xs font-medium text-gray-700">¥{req.amount.toLocaleString()}</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-500 mb-2">起案者: {req.applicant_name}</p>
+
+                        {/* 承認フロー表示 */}
+                        {req.steps.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="text-xs text-gray-400 mr-1">承認ルート:</span>
+                            {req.steps.map((step, i) => {
+                              const dcfg = DECISION_CONFIG[step.decision] ?? DECISION_CONFIG.pending
+                              const Icon = dcfg.icon
+                              return (
+                                <div key={step.id} className="flex items-center gap-1">
+                                  {i > 0 && <ChevronRight size={12} className="text-gray-300" />}
+                                  <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
+                                    step.decision === 'approved' ? 'bg-green-50 border-green-200 text-green-700' :
+                                    step.decision === 'rejected' ? 'bg-red-50 border-red-200 text-red-600' :
+                                    'bg-gray-50 border-gray-200 text-gray-500'
+                                  }`}>
+                                    <Icon size={11} className={dcfg.color} />
+                                    <span>{STEP_ROLE_ICON[step.step_role]}</span>
+                                    <span className="font-medium">{step.approver_name}</span>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {/* 添付ファイル件数 */}
+                        {req.file_attachments?.length > 0 && (
+                          <button
+                            onClick={() => setExpandedId(isExpanded ? null : req.id)}
+                            className="mt-2 flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                          >
+                            <Paperclip size={12} />
+                            添付ファイル {req.file_attachments.length}件 {isExpanded ? '▲' : '▼'}
+                          </button>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500 mb-2">起案者: {req.applicant_name}</p>
-
-                      {/* 承認フロー表示 */}
-                      {req.steps.length > 0 && (
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <span className="text-xs text-gray-400 mr-1">承認ルート:</span>
-                          {req.steps.map((step, i) => {
-                            const dcfg = DECISION_CONFIG[step.decision] ?? DECISION_CONFIG.pending
-                            const Icon = dcfg.icon
-                            return (
-                              <div key={step.id} className="flex items-center gap-1">
-                                {i > 0 && <ChevronRight size={12} className="text-gray-300" />}
-                                <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
-                                  step.decision === 'approved' ? 'bg-green-50 border-green-200 text-green-700' :
-                                  step.decision === 'rejected' ? 'bg-red-50 border-red-200 text-red-600' :
-                                  'bg-gray-50 border-gray-200 text-gray-500'
-                                }`}>
-                                  <Icon size={11} className={dcfg.color} />
-                                  <span>{STEP_ROLE_ICON[step.step_role]}</span>
-                                  <span className="font-medium">{step.approver_name}</span>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {req.status === 'draft' && (
-                        <button
-                          onClick={() => submitMut.mutate(req.id)}
-                          className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-200"
-                        >申請</button>
-                      )}
-                      {req.status === 'pending' && (
-                        <button
-                          onClick={() => setSelected(req)}
-                          className="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200"
-                        >承認/却下</button>
-                      )}
-                      {['draft', 'pending'].includes(req.status) && req.applicant_name === user?.full_name && (
-                        <button
-                          onClick={() => withdrawMut.mutate(req.id)}
-                          className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200"
-                        >取り下げ</button>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* ファイル添付ボタン */}
+                        <label className={`flex items-center gap-1 text-xs px-2 py-1.5 rounded border cursor-pointer transition-colors ${
+                          attachUploading === req.id
+                            ? 'border-gray-200 text-gray-400 cursor-not-allowed'
+                            : 'border-indigo-200 text-indigo-600 hover:bg-indigo-50'
+                        }`}>
+                          <Paperclip size={12} />
+                          {attachUploading === req.id ? '...' : '添付'}
+                          <input
+                            type="file"
+                            className="hidden"
+                            disabled={attachUploading === req.id}
+                            ref={(el) => { attachRefs.current[req.id] = el }}
+                            onChange={(e) => uploadAttachment(req.id, e)}
+                          />
+                        </label>
+                        {req.status === 'draft' && (
+                          <button
+                            onClick={() => submitMut.mutate(req.id)}
+                            className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-200"
+                          >申請</button>
+                        )}
+                        {req.status === 'pending' && (
+                          <button
+                            onClick={() => setSelected(req)}
+                            className="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200"
+                          >承認/却下</button>
+                        )}
+                        {['draft', 'pending'].includes(req.status) && req.applicant_name === user?.full_name && (
+                          <button
+                            onClick={() => withdrawMut.mutate(req.id)}
+                            className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200"
+                          >取り下げ</button>
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  {/* 添付ファイル展開エリア */}
+                  {isExpanded && req.file_attachments?.length > 0 && (
+                    <div className="bg-indigo-50 px-8 py-3 border-t border-indigo-100">
+                      <p className="text-xs font-medium text-indigo-600 mb-2">添付ファイル</p>
+                      <div className="flex flex-wrap gap-3">
+                        {req.file_attachments.map((att) => (
+                          <div key={att.id}
+                            className="flex items-center gap-2 bg-white border border-indigo-100 rounded-lg px-3 py-2 text-xs">
+                            <File size={14} className="text-indigo-400 shrink-0" />
+                            <span className="text-gray-700 max-w-[160px] truncate">{att.file_name}</span>
+                            <span className="text-gray-400">{formatFileSize(att.file_size)}</span>
+                            <button
+                              onClick={() => downloadAttachment(req.id, att.id, att.file_name)}
+                              className="text-indigo-500 hover:text-indigo-700 ml-1"
+                              title="ダウンロード"
+                            >
+                              <Download size={13} />
+                            </button>
+                            <button
+                              onClick={() => confirm('削除しますか？') && deleteAttachMut.mutate({ reqId: req.id, attachId: att.id })}
+                              className="text-gray-300 hover:text-red-400 ml-1"
+                              title="削除"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -261,6 +395,44 @@ export default function ApprovalPage() {
                 />
               </div>
 
+              {/* 添付ファイル（見積書など） */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">添付ファイル（見積書・資料など）</label>
+                <div
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-3 cursor-pointer hover:border-indigo-400 transition-colors"
+                  onClick={() => newAttachRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    const newFiles = Array.from(e.dataTransfer.files)
+                    setPendingFiles((prev) => [...prev, ...newFiles])
+                  }}
+                >
+                  <p className="text-xs text-gray-500 text-center">クリックまたはドラッグでファイルを追加</p>
+                  <input
+                    ref={newAttachRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const newFiles = Array.from(e.target.files ?? [])
+                      setPendingFiles((prev) => [...prev, ...newFiles])
+                      e.target.value = ''
+                    }}
+                  />
+                </div>
+                {pendingFiles.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {pendingFiles.map((f, i) => (
+                      <li key={i} className="flex items-center justify-between text-xs bg-gray-50 rounded px-2 py-1">
+                        <span className="truncate text-gray-700">{f.name} <span className="text-gray-400">({(f.size / 1024).toFixed(0)} KB)</span></span>
+                        <button onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))} className="ml-2 text-gray-400 hover:text-red-500">×</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               {/* 自動生成された承認ルート */}
               {defaultSteps.length > 0 && (
                 <div className="bg-indigo-50 rounded-lg p-3">
@@ -311,18 +483,28 @@ export default function ApprovalPage() {
           req={selected}
           onClose={() => setSelected(null)}
           onDecide={(decision, comment) => decideMut.mutate({ id: selected.id, decision, comment })}
+          isPending={decideMut.isPending}
         />
       )}
     </div>
   )
 }
 
-function DecideModal({ req, onClose, onDecide }: {
+function DecideModal({ req, onClose, onDecide, isPending }: {
   req: ApprovalRequest
   onClose: () => void
   onDecide: (decision: string, comment: string) => void
+  isPending?: boolean
 }) {
   const [comment, setComment] = useState('')
+
+  const handleDecide = (decision: string) => {
+    if (!comment.trim()) {
+      alert('承認・却下には理由（コメント）を入力してください')
+      return
+    }
+    onDecide(decision, comment)
+  }
 
   const currentStep = req.steps.find((s) => s.decision === 'pending')
 
@@ -365,24 +547,29 @@ function DecideModal({ req, onClose, onDecide }: {
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">コメント</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            理由・コメント <span className="text-red-500">*</span>
+          </label>
           <textarea
             className="w-full border rounded-lg px-3 py-2 text-sm h-20 resize-none"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="コメントを入力（任意）"
+            placeholder="承認・却下の理由を入力してください（必須）"
           />
+          {!comment.trim() && <p className="text-xs text-red-500 mt-1">理由は必須です</p>}
         </div>
         <div className="flex gap-3 mt-4">
-          <button onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm">キャンセル</button>
+          <button onClick={onClose} disabled={isPending} className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm disabled:opacity-50">キャンセル</button>
           <button
-            onClick={() => onDecide('rejected', comment)}
-            className="flex-1 bg-red-500 text-white py-2 rounded-lg text-sm hover:bg-red-600"
-          >却下</button>
+            onClick={() => handleDecide('rejected')}
+            disabled={isPending || !comment.trim()}
+            className="flex-1 bg-red-500 text-white py-2 rounded-lg text-sm hover:bg-red-600 disabled:opacity-50"
+          >{isPending ? '処理中...' : '却下'}</button>
           <button
-            onClick={() => onDecide('approved', comment)}
-            className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm hover:bg-green-700"
-          >承認</button>
+            onClick={() => handleDecide('approved')}
+            disabled={isPending || !comment.trim()}
+            className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm hover:bg-green-700 disabled:opacity-50"
+          >{isPending ? '処理中...' : '承認'}</button>
         </div>
       </div>
     </div>

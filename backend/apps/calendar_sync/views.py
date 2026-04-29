@@ -1,17 +1,19 @@
 import os
 import json
 import holidays
+import csv
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from django.conf import settings
 from django.utils import timezone
 from django.shortcuts import redirect
+from django.http import HttpResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 import requests
-from .models import UserCalendarToken
+from .models import UserCalendarToken, CalendarEvent
 from .serializers import UserCalendarTokenSerializer
 
 
@@ -182,7 +184,7 @@ class CalendarViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'])
     def events(self, request):
-        """ユーザーのカレンダーイベントを取得（MS / Google）"""
+        """ユーザーのカレンダーイベントを取得（DB + MS / Google）"""
         year = request.query_params.get('year')
         month = request.query_params.get('month')
 
@@ -196,6 +198,24 @@ class CalendarViewSet(viewsets.ViewSet):
             return Response({'error': '年月は数値で指定してください'}, status=status.HTTP_400_BAD_REQUEST)
 
         events = []
+
+        # DB から保存済みイベント取得
+        db_events = CalendarEvent.objects.filter(
+            user=request.user,
+            is_deleted=False,
+            start_datetime__year=year,
+            start_datetime__month=month
+        ).order_by('start_datetime')
+
+        for event in db_events:
+            events.append({
+                'id': str(event.id),
+                'title': event.title,
+                'start': event.start_datetime.isoformat(),
+                'end': event.end_datetime.isoformat(),
+                'provider': event.get_provider_display().lower(),
+                'url': event.url,
+            })
 
         # Microsoft カレンダーイベント取得
         try:
@@ -308,26 +328,69 @@ class CalendarViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'])
     def create_event(self, request):
-        """カレンダーに予定を追加"""
+        """カレンダーに予定を追加（DB保存 + 外部カレンダー同期）"""
         title = request.data.get('title')
         date_str = request.data.get('date')
-        provider = request.data.get('provider')  # 'ms' or 'google'
+        provider = request.data.get('provider')  # 'ms', 'google', 'local'
+        start_time_str = request.data.get('start_time', '09:00')  # デフォルト 9:00
+        end_time_str = request.data.get('end_time', '10:00')  # デフォルト 10:00
 
         if not title or not date_str or not provider:
             return Response({'error': '必須フィールドが不足しています'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            token = UserCalendarToken.objects.get(user=request.user, provider=provider)
-        except UserCalendarToken.DoesNotExist:
-            return Response({'error': f'カレンダーが同期されていません'}, status=status.HTTP_400_BAD_REQUEST)
+            from datetime import datetime, time
+            event_date = datetime.fromisoformat(date_str).date()
 
-        try:
+            # 時刻の解析
+            try:
+                start_parts = start_time_str.split(':')
+                end_parts = end_time_str.split(':')
+                start_time = datetime.combine(
+                    event_date,
+                    time(int(start_parts[0]), int(start_parts[1]) if len(start_parts) > 1 else 0)
+                )
+                end_time = datetime.combine(
+                    event_date,
+                    time(int(end_parts[0]), int(end_parts[1]) if len(end_parts) > 1 else 0)
+                )
+            except (ValueError, IndexError):
+                start_time = datetime.combine(event_date, time(9, 0))
+                end_time = datetime.combine(event_date, time(10, 0))
+
+            # DB に保存
+            db_event = CalendarEvent.objects.create(
+                user=request.user,
+                title=title,
+                start_datetime=start_time,
+                end_datetime=end_time,
+                provider=provider
+            )
+
+            external_id = None
+
+            # 外部カレンダーに同期（オプション）
             if provider == 'ms':
-                event_id = self._create_ms_calendar_event(token, title, date_str)
-            else:  # google
-                event_id = self._create_google_calendar_event(token, title, date_str)
+                try:
+                    token = UserCalendarToken.objects.get(user=request.user, provider='ms')
+                    external_id = self._create_ms_calendar_event(token, title, date_str)
+                    db_event.external_id = external_id
+                    db_event.save()
+                except UserCalendarToken.DoesNotExist:
+                    pass  # MS 同期未設定の場合はスキップ
+            elif provider == 'google':
+                try:
+                    token = UserCalendarToken.objects.get(user=request.user, provider='google')
+                    external_id = self._create_google_calendar_event(token, title, date_str)
+                    db_event.external_id = external_id
+                    db_event.save()
+                except UserCalendarToken.DoesNotExist:
+                    pass  # Google 同期未設定の場合はスキップ
 
-            return Response({'message': '予定を追加しました', 'event_id': event_id}, status=status.HTTP_201_CREATED)
+            return Response(
+                {'message': '予定を追加しました', 'event_id': str(db_event.id)},
+                status=status.HTTP_201_CREATED
+            )
         except Exception as e:
             return Response({'error': f'予定の追加に失敗しました: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -389,9 +452,9 @@ class CalendarViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'])
     def update_event(self, request):
-        """カレンダーの予定を更新"""
+        """カレンダーの予定を更新（DB + 外部カレンダー）"""
         event_id = request.data.get('event_id')
-        provider = request.data.get('provider')  # 'ms' or 'google'
+        provider = request.data.get('provider')  # 'ms', 'google', or 'local'
         title = request.data.get('title')
         start = request.data.get('start')
         end = request.data.get('end')
@@ -400,15 +463,29 @@ class CalendarViewSet(viewsets.ViewSet):
             return Response({'error': '必須フィールドが不足しています'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            token = UserCalendarToken.objects.get(user=request.user, provider=provider)
-        except UserCalendarToken.DoesNotExist:
-            return Response({'error': 'カレンダーが同期されていません'}, status=status.HTTP_400_BAD_REQUEST)
+            # DB の CalendarEvent を更新
+            try:
+                event = CalendarEvent.objects.get(id=event_id, user=request.user)
+                if title:
+                    event.title = title
+                if start:
+                    event.start_datetime = start
+                if end:
+                    event.end_datetime = end
+                event.save()
+            except CalendarEvent.DoesNotExist:
+                return Response({'error': 'イベントが見つかりません'}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            if provider == 'ms':
-                self._update_ms_calendar_event(token, event_id, title, start, end)
-            else:  # google
-                self._update_google_calendar_event(token, event_id, title, start, end)
+            # 外部カレンダーがあれば同期
+            if provider in ['ms', 'google'] and event.external_id:
+                try:
+                    token = UserCalendarToken.objects.get(user=request.user, provider=provider)
+                    if provider == 'ms':
+                        self._update_ms_calendar_event(token, event.external_id, title, start, end)
+                    else:  # google
+                        self._update_google_calendar_event(token, event.external_id, title, start, end)
+                except UserCalendarToken.DoesNotExist:
+                    pass  # 外部同期未設定でも DB 更新は成功
 
             return Response({'message': '予定を更新しました'}, status=status.HTTP_200_OK)
         except Exception as e:
@@ -464,23 +541,33 @@ class CalendarViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'])
     def delete_event(self, request):
-        """カレンダーの予定を削除"""
+        """カレンダーの予定を削除（DB + 外部カレンダー）"""
         event_id = request.data.get('event_id')
-        provider = request.data.get('provider')  # 'ms' or 'google'
+        provider = request.data.get('provider')  # 'ms', 'google', or 'local'
 
         if not event_id or not provider:
             return Response({'error': '必須フィールドが不足しています'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            token = UserCalendarToken.objects.get(user=request.user, provider=provider)
-        except UserCalendarToken.DoesNotExist:
-            return Response({'error': 'カレンダーが同期されていません'}, status=status.HTTP_400_BAD_REQUEST)
+            # DB の CalendarEvent を取得
+            try:
+                event = CalendarEvent.objects.get(id=event_id, user=request.user)
+            except CalendarEvent.DoesNotExist:
+                return Response({'error': 'イベントが見つかりません'}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            if provider == 'ms':
-                self._delete_ms_calendar_event(token, event_id)
-            else:  # google
-                self._delete_google_calendar_event(token, event_id)
+            # 外部カレンダーがあれば同期
+            if provider in ['ms', 'google'] and event.external_id:
+                try:
+                    token = UserCalendarToken.objects.get(user=request.user, provider=provider)
+                    if provider == 'ms':
+                        self._delete_ms_calendar_event(token, event.external_id)
+                    else:  # google
+                        self._delete_google_calendar_event(token, event.external_id)
+                except UserCalendarToken.DoesNotExist:
+                    pass  # 外部同期未設定でも DB 削除は実行
+
+            # DB から削除（soft delete）
+            event.delete()
 
             return Response({'message': '予定を削除しました'}, status=status.HTTP_200_OK)
         except Exception as e:
@@ -499,3 +586,72 @@ class CalendarViewSet(viewsets.ViewSet):
         headers = {'Authorization': f'Bearer {token.access_token}'}
         response = requests.delete(url, headers=headers, timeout=10)
         response.raise_for_status()
+
+    @action(detail=False, methods=['get'])
+    def export_events(self, request):
+        """カレンダーイベントをエクスポート（CSV）"""
+        format_type = request.query_params.get('format', 'csv')  # csv または ics
+        year = request.query_params.get('year')
+        month = request.query_params.get('month')
+
+        # ユーザーのイベントを取得
+        events = CalendarEvent.objects.filter(user=request.user, is_deleted=False)
+
+        if year and month:
+            try:
+                year = int(year)
+                month = int(month)
+                events = events.filter(start_datetime__year=year, start_datetime__month=month)
+            except ValueError:
+                pass
+
+        events = events.order_by('start_datetime')
+
+        if format_type == 'ics':
+            return self._export_ics(events)
+        else:  # csv
+            return self._export_csv(events)
+
+    def _export_csv(self, events):
+        """CSV形式でエクスポート"""
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="calendar_events.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(['タイトル', '開始日時', '終了日時', 'プロバイダー', '作成日'])
+
+        for event in events:
+            writer.writerow([
+                event.title,
+                event.start_datetime.strftime('%Y-%m-%d %H:%M'),
+                event.end_datetime.strftime('%Y-%m-%d %H:%M'),
+                event.get_provider_display(),
+                event.created_at.strftime('%Y-%m-%d'),
+            ])
+
+        return response
+
+    def _export_ics(self, events):
+        """ICS形式でエクスポート"""
+        response = HttpResponse(content_type='text/calendar; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="calendar_events.ics"'
+
+        ics_content = 'BEGIN:VCALENDAR\r\n'
+        ics_content += 'VERSION:2.0\r\n'
+        ics_content += 'PRODID:-//HRM Calendar//EN\r\n'
+        ics_content += 'CALSCALE:GREGORIAN\r\n'
+
+        for event in events:
+            ics_content += 'BEGIN:VEVENT\r\n'
+            ics_content += f'UID:{event.id}@hrm\r\n'
+            ics_content += f'SUMMARY:{event.title}\r\n'
+            ics_content += f'DTSTART:{event.start_datetime.strftime("%Y%m%dT%H%M%S")}\r\n'
+            ics_content += f'DTEND:{event.end_datetime.strftime("%Y%m%dT%H%M%S")}\r\n'
+            ics_content += f'DTSTAMP:{event.created_at.strftime("%Y%m%dT%H%M%SZ")}\r\n'
+            ics_content += f'CREATED:{event.created_at.strftime("%Y%m%dT%H%M%SZ")}\r\n'
+            ics_content += f'LAST-MODIFIED:{event.updated_at.strftime("%Y%m%dT%H%M%SZ")}\r\n'
+            ics_content += 'END:VEVENT\r\n'
+
+        ics_content += 'END:VCALENDAR\r\n'
+        response.write(ics_content)
+        return response
