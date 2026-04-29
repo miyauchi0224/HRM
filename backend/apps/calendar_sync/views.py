@@ -1,6 +1,6 @@
 import os
 import json
-import jpholiday
+import holidays
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from django.conf import settings
@@ -35,35 +35,21 @@ class CalendarViewSet(viewsets.ViewSet):
         except ValueError:
             return Response({'error': '年月は数値で指定してください'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # jpholiday で指定年月の祝日を取得
-        from datetime import date, timedelta
-        start_date = date(year, month, 1)
-        if month == 12:
-            end_date = date(year + 1, 1, 1) - timedelta(days=1)
-        else:
-            end_date = date(year, month + 1, 1) - timedelta(days=1)
+        # holidays ライブラリで日本の祝日を取得
+        from datetime import date
+        jp_holidays = holidays.Japan(years=year)
 
-        # 該当期間の各日付をチェック
-        holidays = []
-        current = start_date
-        while current <= end_date:
-            # jpholiday.is_holiday() で祝日判定
-            if jpholiday.is_holiday(current):
-                # jpholiday.get_holiday_name() で祝日名を取得
-                try:
-                    holiday_name = jpholiday.get_holiday_name(current)
-                except Exception:
-                    # 取得失敗時はデフォルト名
-                    holiday_name = 'Holiday'
-
-                holidays.append({
-                    'date': current.isoformat(),
+        holidays_list = []
+        for holiday_date, holiday_name in sorted(jp_holidays.items()):
+            # 指定月の祝日のみフィルタ
+            if holiday_date.month == month and holiday_date.year == year:
+                holidays_list.append({
+                    'date': holiday_date.isoformat(),
                     'name': holiday_name,
                     'type': 'holiday'
                 })
-            current += timedelta(days=1)
 
-        return Response({'holidays': holidays})
+        return Response({'holidays': holidays_list})
 
     @action(detail=False, methods=['get'])
     def oauth_ms_start(self, request):
