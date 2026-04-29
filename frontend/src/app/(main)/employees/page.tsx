@@ -666,7 +666,7 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<{ email: string; temp_password: string } | null>(null)
 
-  const set = (k: string, v: string | number) => setForm((f) => ({ ...f, [k]: v }))
+  const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }))
 
   const save = async () => {
     setSaving(true)
@@ -737,7 +737,7 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ログイン情報</p>
           <div className="grid gap-3">
             <Field label="メールアドレス *">
-              <Input k="email" type="email" placeholder="example@company.com" />
+              <Input k="email" type="email" placeholder="example@company.com" autoFocus />
             </Field>
             <Field label="ロール（複数選択可） *">
               <div className="grid grid-cols-3 gap-2">
