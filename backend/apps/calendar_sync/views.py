@@ -400,3 +400,116 @@ class CalendarViewSet(viewsets.ViewSet):
         response = requests.post(url, headers=headers, json=data, timeout=10)
         response.raise_for_status()
         return response.json().get('id')
+
+    @action(detail=False, methods=['post'])
+    def update_event(self, request):
+        """カレンダーの予定を更新"""
+        event_id = request.data.get('event_id')
+        provider = request.data.get('provider')  # 'ms' or 'google'
+        title = request.data.get('title')
+        start = request.data.get('start')
+        end = request.data.get('end')
+
+        if not event_id or not provider:
+            return Response({'error': '必須フィールドが不足しています'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            token = UserCalendarToken.objects.get(user=request.user, provider=provider)
+        except UserCalendarToken.DoesNotExist:
+            return Response({'error': 'カレンダーが同期されていません'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if provider == 'ms':
+                self._update_ms_calendar_event(token, event_id, title, start, end)
+            else:  # google
+                self._update_google_calendar_event(token, event_id, title, start, end)
+
+            return Response({'message': '予定を更新しました'}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': f'予定の更新に失敗しました: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _update_ms_calendar_event(self, token, event_id, title, start, end):
+        """Microsoft Graphで予定を更新"""
+        url = f'https://graph.microsoft.com/v1.0/me/events/{event_id}'
+        headers = {
+            'Authorization': f'Bearer {token.access_token}',
+            'Content-Type': 'application/json'
+        }
+        data = {}
+        if title:
+            data['subject'] = title
+        if start:
+            data['start'] = {
+                'dateTime': start,
+                'timeZone': 'Asia/Tokyo'
+            }
+        if end:
+            data['end'] = {
+                'dateTime': end,
+                'timeZone': 'Asia/Tokyo'
+            }
+
+        response = requests.patch(url, headers=headers, json=data, timeout=10)
+        response.raise_for_status()
+
+    def _update_google_calendar_event(self, token, event_id, title, start, end):
+        """Google Calendarで予定を更新"""
+        url = f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}'
+        headers = {
+            'Authorization': f'Bearer {token.access_token}',
+            'Content-Type': 'application/json'
+        }
+        data = {}
+        if title:
+            data['summary'] = title
+        if start:
+            data['start'] = {
+                'dateTime': start,
+                'timeZone': 'Asia/Tokyo'
+            }
+        if end:
+            data['end'] = {
+                'dateTime': end,
+                'timeZone': 'Asia/Tokyo'
+            }
+
+        response = requests.patch(url, headers=headers, json=data, timeout=10)
+        response.raise_for_status()
+
+    @action(detail=False, methods=['post'])
+    def delete_event(self, request):
+        """カレンダーの予定を削除"""
+        event_id = request.data.get('event_id')
+        provider = request.data.get('provider')  # 'ms' or 'google'
+
+        if not event_id or not provider:
+            return Response({'error': '必須フィールドが不足しています'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            token = UserCalendarToken.objects.get(user=request.user, provider=provider)
+        except UserCalendarToken.DoesNotExist:
+            return Response({'error': 'カレンダーが同期されていません'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if provider == 'ms':
+                self._delete_ms_calendar_event(token, event_id)
+            else:  # google
+                self._delete_google_calendar_event(token, event_id)
+
+            return Response({'message': '予定を削除しました'}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': f'予定の削除に失敗しました: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _delete_ms_calendar_event(self, token, event_id):
+        """Microsoft Graphで予定を削除"""
+        url = f'https://graph.microsoft.com/v1.0/me/events/{event_id}'
+        headers = {'Authorization': f'Bearer {token.access_token}'}
+        response = requests.delete(url, headers=headers, timeout=10)
+        response.raise_for_status()
+
+    def _delete_google_calendar_event(self, token, event_id):
+        """Google Calendarで予定を削除"""
+        url = f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}'
+        headers = {'Authorization': f'Bearer {token.access_token}'}
+        response = requests.delete(url, headers=headers, timeout=10)
+        response.raise_for_status()
