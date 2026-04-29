@@ -5,7 +5,7 @@ import api from '@/lib/api'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
-import { Calendar, Unlink, X, Download, Grid3X3, Columns3, Calendar as CalendarIcon } from 'lucide-react'
+import { Calendar, Unlink, X, Grid3X3, Columns3, Calendar as CalendarIcon } from 'lucide-react'
 
 interface NewEventData {
   date: string
@@ -38,7 +38,6 @@ export default function CalendarPanel() {
   const [editStart, setEditStart] = useState('')
   const [editEnd, setEditEnd] = useState('')
   const [editAllDay, setEditAllDay] = useState(false)
-  const [exporting, setExporting] = useState(false)
   const qc = useQueryClient()
 
   // 祝日取得
@@ -166,26 +165,6 @@ export default function CalendarPanel() {
     setEventAllDay(false)
   }
 
-  const handleExport = async (format: 'csv' | 'ics') => {
-    setExporting(true)
-    try {
-      const response = await api.get(
-        `/api/v1/calendar/events/export/?format=${format}&year=${year}&month=${month}`,
-        { responseType: 'blob' }
-      )
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `calendar_events.${format === 'ics' ? 'ics' : 'csv'}`)
-      document.body.appendChild(link)
-      link.click()
-      link.parentNode?.removeChild(link)
-    } catch (error) {
-      alert('エクスポートに失敗しました')
-    } finally {
-      setExporting(false)
-    }
-  }
 
   const handleAddEvent = () => {
     if (!eventTitle.trim() || !newEventModal) return
@@ -226,23 +205,6 @@ export default function CalendarPanel() {
           <h2 className="text-lg font-bold text-gray-800">カレンダー</h2>
         </div>
         <div className="flex gap-2 items-center">
-          <button
-            onClick={() => handleExport('csv')}
-            disabled={exporting}
-            className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 text-white text-xs rounded-lg font-medium transition-colors"
-            title="CSVでエクスポート"
-          >
-            {exporting ? 'エクスポート中...' : 'CSV'}
-          </button>
-          <button
-            onClick={() => handleExport('ics')}
-            disabled={exporting}
-            className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 text-white text-xs rounded-lg font-medium transition-colors"
-            title="ICSでエクスポート"
-          >
-            {exporting ? 'エクスポート中...' : 'ICS'}
-          </button>
-          <div className="flex gap-2">
             {!providers.includes('ms') && (
             <button
               onClick={() => handleOAuthStart('ms')}
