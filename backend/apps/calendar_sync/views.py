@@ -53,7 +53,7 @@ class CalendarViewSet(viewsets.ViewSet):
 
         return Response({'holidays': holidays_list})
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], url_path='oauth/ms/start')
     def oauth_ms_start(self, request):
         """Microsoft OAuth認証開始"""
         client_id = settings.MICROSOFT_CLIENT_ID
@@ -72,7 +72,7 @@ class CalendarViewSet(viewsets.ViewSet):
         }
         return redirect(f'{auth_url}?{urlencode(params)}')
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], url_path='oauth/ms/callback')
     def oauth_ms_callback(self, request):
         """Microsoft OAuth コールバック"""
         code = request.query_params.get('code')
@@ -118,7 +118,7 @@ class CalendarViewSet(viewsets.ViewSet):
         except Exception as e:
             return Response({'error': f'Token exchange failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], url_path='oauth/google/start')
     def oauth_google_start(self, request):
         """Google OAuth認証開始"""
         client_id = settings.GOOGLE_CLIENT_ID
@@ -137,7 +137,7 @@ class CalendarViewSet(viewsets.ViewSet):
         }
         return redirect(f'{auth_url}?{urlencode(params)}')
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], url_path='oauth/google/callback')
     def oauth_google_callback(self, request):
         """Google OAuth コールバック"""
         code = request.query_params.get('code')
@@ -312,7 +312,7 @@ class CalendarViewSet(viewsets.ViewSet):
             })
         return events
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='oauth/revoke')
     def oauth_revoke(self, request):
         """OAuth連携を解除"""
         provider = request.data.get('provider')  # 'ms' or 'google'
@@ -332,7 +332,7 @@ class CalendarViewSet(viewsets.ViewSet):
         tokens = UserCalendarToken.objects.filter(user=request.user, is_deleted=False).values_list('provider', flat=True)
         return Response({'providers': list(tokens)})
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='events/create')
     def create_event(self, request):
         """カレンダーに予定を追加（DB保存 + 外部カレンダー同期）"""
         title = request.data.get('title')
@@ -456,7 +456,7 @@ class CalendarViewSet(viewsets.ViewSet):
         response.raise_for_status()
         return response.json().get('id')
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='events/update_event')
     def update_event(self, request):
         """カレンダーの予定を更新（DB + 外部カレンダー）"""
         event_id = request.data.get('event_id')
@@ -545,7 +545,7 @@ class CalendarViewSet(viewsets.ViewSet):
         response = requests.patch(url, headers=headers, json=data, timeout=10)
         response.raise_for_status()
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='events/delete_event')
     def delete_event(self, request):
         """カレンダーの予定を削除（DB + 外部カレンダー）"""
         event_id = request.data.get('event_id')
@@ -593,7 +593,7 @@ class CalendarViewSet(viewsets.ViewSet):
         response = requests.delete(url, headers=headers, timeout=10)
         response.raise_for_status()
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], url_path='events/export')
     def export_events(self, request):
         """カレンダーイベントをエクスポート（CSV）"""
         format_type = request.query_params.get('format', 'csv')  # csv または ics
