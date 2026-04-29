@@ -5,7 +5,6 @@ import api from '@/lib/api'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
-import interactionPlugin from '@fullcalendar/interaction'
 import { Calendar, Unlink, X, Download, Grid3X3, Columns3, Calendar as CalendarIcon } from 'lucide-react'
 
 interface NewEventData {
@@ -319,7 +318,7 @@ export default function CalendarPanel() {
         </div>
 
         <FullCalendar
-          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          plugins={[dayGridPlugin, timeGridPlugin]}
           initialView={calendarView}
           headerToolbar={{
             left: 'prev,next today',
@@ -328,6 +327,10 @@ export default function CalendarPanel() {
           }}
           events={calendarEvents}
           height="auto"
+          slotDuration="00:30:00"
+          slotLabelInterval="00:30:00"
+          businessHours={{ startTime: '09:00', endTime: '18:00' }}
+          nowIndicator={true}
           eventClick={(info) => {
             // カレンダーイベントの編集モーダルを表示
             if (info.event.extendedProps.provider) {
