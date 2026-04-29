@@ -20,6 +20,7 @@ async function uploadImage(file: File): Promise<string> {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
   const url: string = res.data.url
+  // API から返された相対パスを絶対 URL に正規化（ローカル開発・本番で対応）
   return url.startsWith('http') ? url : `http://localhost:8000${url}`
 }
 
@@ -29,6 +30,7 @@ function ToolbarBtn({
   return (
     <button
       type="button"
+      // preventDefault でエディタのフォーカスを失わないようにする
       onMouseDown={(e) => { e.preventDefault(); onClick() }}
       title={title}
       className={`p-1.5 rounded transition-colors ${
@@ -76,6 +78,7 @@ export default function RichTextEditor({ content, onChange }: Props) {
   }, [editor])
 
   const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    // クリップボード内の画像を検出してアップロード
     const items = Array.from(e.clipboardData.items)
     const imageItem = items.find((item) => item.type.startsWith('image/'))
     if (imageItem) {
@@ -86,6 +89,7 @@ export default function RichTextEditor({ content, onChange }: Props) {
   }, [handleImageUpload])
 
   const setLink = useCallback(() => {
+    // ユーザー入力の URL でリンクを挿入
     const url = window.prompt('URLを入力してください')
     if (!url) return
     editor?.chain().focus().setLink({ href: url }).run()
