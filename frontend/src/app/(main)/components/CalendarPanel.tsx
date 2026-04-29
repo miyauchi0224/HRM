@@ -261,33 +261,42 @@ export default function CalendarPanel() {
             // 土曜日を青色背景に、日曜日を赤色背景に設定
             const dayText = info.el.querySelector('.fc-daygrid-day-number')
             if (isSaturday(info.date)) {
-              info.el.classList.add('bg-blue-50')
+              info.el.classList.add('bg-blue-50', 'cursor-pointer')
               if (dayText) {
                 dayText.classList.add('text-blue-600', 'font-semibold')
               }
-            } else if (isSunday(info.date)) {
-              info.el.classList.add('bg-red-50')
+            } else if (isSunday(info.el.date)) {
+              info.el.classList.add('bg-red-50', 'cursor-pointer')
               if (dayText) {
                 dayText.classList.add('text-red-600', 'font-semibold')
               }
+            } else {
+              info.el.classList.add('cursor-pointer')
             }
-          }}
-          dateClick={(info) => {
-            // ダブルクリック判定用のカウンター
-            const clickKey = `click-${info.dateStr}`
-            let clicks = (window as any)[clickKey] || 0
-            clicks++
-            ;(window as any)[clickKey] = clicks
 
-            if (clicks === 1) {
-              setTimeout(() => {
-                ;(window as any)[clickKey] = 0
-              }, 300)
-            } else if (clicks === 2) {
-              ;(window as any)[clickKey] = 0
-              // ダブルクリック時に予定追加モーダルを表示
-              handleDateDblClick(info.dateStr, providers.includes('google') ? 'google' : 'ms')
+            // ダブルクリック検出
+            const dateStr = info.dateStr
+            let clickCount = 0
+            let clickTimer: NodeJS.Timeout
+
+            const handleDayClick = () => {
+              clickCount++
+              if (clickCount === 1) {
+                clickTimer = setTimeout(() => {
+                  clickCount = 0
+                }, 300)
+              } else if (clickCount === 2) {
+                clearTimeout(clickTimer)
+                clickCount = 0
+                // ダブルクリック時に予定追加
+                handleDateDblClick(
+                  dateStr,
+                  providers.includes('google') ? 'google' : providers.includes('ms') ? 'ms' : 'google'
+                )
+              }
             }
+
+            info.el.addEventListener('click', handleDayClick)
           }}
           locale="ja"
           buttonText={{
