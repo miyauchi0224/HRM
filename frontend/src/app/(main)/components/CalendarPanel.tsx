@@ -28,10 +28,14 @@ export default function CalendarPanel() {
   const [newEventModal, setNewEventModal] = useState<NewEventData | null>(null)
   const [eventTitle, setEventTitle] = useState('')
   const [selectedProvider, setSelectedProvider] = useState<'ms' | 'google' | 'local'>('local')
+  const [eventStartTime, setEventStartTime] = useState('09:00')
+  const [eventEndTime, setEventEndTime] = useState('10:00')
+  const [eventAllDay, setEventAllDay] = useState(false)
   const [editEventModal, setEditEventModal] = useState<EditEventData | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editStart, setEditStart] = useState('')
   const [editEnd, setEditEnd] = useState('')
+  const [editAllDay, setEditAllDay] = useState(false)
   const [exporting, setExporting] = useState(false)
   const qc = useQueryClient()
 
@@ -155,6 +159,9 @@ export default function CalendarPanel() {
     setNewEventModal({ date, title: '', provider: 'local' })
     setEventTitle('')
     setSelectedProvider('local')
+    setEventStartTime('09:00')
+    setEventEndTime('10:00')
+    setEventAllDay(false)
   }
 
   const handleExport = async (format: 'csv' | 'ics') => {
@@ -180,11 +187,20 @@ export default function CalendarPanel() {
 
   const handleAddEvent = () => {
     if (!eventTitle.trim() || !newEventModal) return
-    createEventMutation.mutate({
+    const data: any = {
       title: eventTitle,
       date: newEventModal.date,
       provider: selectedProvider,
-    })
+    }
+    // 時刻を追加（終日の場合は 00:00-23:59）
+    if (eventAllDay) {
+      data.start_time = '00:00'
+      data.end_time = '23:59'
+    } else {
+      data.start_time = eventStartTime
+      data.end_time = eventEndTime
+    }
+    createEventMutation.mutate(data)
   }
 
   const isWeekend = (date: Date) => {
@@ -289,6 +305,7 @@ export default function CalendarPanel() {
               setEditTitle(info.event.title)
               setEditStart(info.event.startStr || '')
               setEditEnd(info.event.endStr || '')
+              setEditAllDay(info.event.allDay || false)
             }
           }}
           eventDidMount={(info) => {
@@ -426,6 +443,46 @@ export default function CalendarPanel() {
                   autoFocus
                 />
               </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="allDay"
+                  checked={eventAllDay}
+                  onChange={(e) => setEventAllDay(e.target.checked)}
+                  className="rounded"
+                />
+                <label htmlFor="allDay" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  終日
+                </label>
+              </div>
+
+              {!eventAllDay && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      開始時刻
+                    </label>
+                    <input
+                      type="time"
+                      value={eventStartTime}
+                      onChange={(e) => setEventStartTime(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      終了時刻
+                    </label>
+                    <input
+                      type="time"
+                      value={eventEndTime}
+                      onChange={(e) => setEventEndTime(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 justify-end">
