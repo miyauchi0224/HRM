@@ -4,7 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
-import { Calendar, Unlink, X, Download } from 'lucide-react'
+import timeGridPlugin from '@fullcalendar/timegrid'
+import interactionPlugin from '@fullcalendar/interaction'
+import { Calendar, Unlink, X, Download, Grid3X3, Columns3, Calendar as CalendarIcon } from 'lucide-react'
 
 interface NewEventData {
   date: string
@@ -24,6 +26,7 @@ interface EditEventData {
 export default function CalendarPanel() {
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth() + 1)
+  const [calendarView, setCalendarView] = useState<'dayGridMonth' | 'timeGridWeek' | 'timeGridDay'>('dayGridMonth')
   const [revoking, setRevoking] = useState<string | null>(null)
   const [newEventModal, setNewEventModal] = useState<NewEventData | null>(null)
   const [eventTitle, setEventTitle] = useState('')
@@ -281,9 +284,43 @@ export default function CalendarPanel() {
 
       {/* カレンダー表示 */}
       <div className="bg-gray-50 rounded-lg p-4 mb-4">
+        {/* ビュー切り替えボタン */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setCalendarView('dayGridMonth')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              calendarView === 'dayGridMonth'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Grid3X3 size={16} /> 月
+          </button>
+          <button
+            onClick={() => setCalendarView('timeGridWeek')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              calendarView === 'timeGridWeek'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Columns3 size={16} /> 週
+          </button>
+          <button
+            onClick={() => setCalendarView('timeGridDay')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              calendarView === 'timeGridDay'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <CalendarIcon size={16} /> 日
+          </button>
+        </div>
+
         <FullCalendar
-          plugins={[dayGridPlugin]}
-          initialView="dayGridMonth"
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          initialView={calendarView}
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
