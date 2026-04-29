@@ -245,39 +245,39 @@ export default function CalendarPanel() {
           </button>
           <div className="flex gap-2">
             {!providers.includes('ms') && (
-            <button
-              onClick={() => handleOAuthStart('ms')}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition-colors"
-            >
-              Microsoft と同期
-            </button>
-          )}
-          {providers.includes('ms') && (
-            <button
-              onClick={() => handleRevoke('ms')}
-              disabled={revoking === 'ms'}
-              className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs rounded-lg font-medium transition-colors disabled:bg-gray-200 disabled:text-gray-400"
-            >
-              <Unlink size={12} /> {revoking === 'ms' ? '解除中...' : '解除'}
-            </button>
-          )}
-          {!providers.includes('google') && (
-            <button
-              onClick={() => handleOAuthStart('google')}
-              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg font-medium transition-colors"
-            >
-              Google と同期
-            </button>
-          )}
-          {providers.includes('google') && (
-            <button
-              onClick={() => handleRevoke('google')}
-              disabled={revoking === 'google'}
-              className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs rounded-lg font-medium transition-colors disabled:bg-gray-200 disabled:text-gray-400"
-            >
-              <Unlink size={12} /> {revoking === 'google' ? '解除中...' : '解除'}
-            </button>
-          )}
+              <button
+                onClick={() => handleOAuthStart('ms')}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition-colors"
+              >
+                Microsoft と同期
+              </button>
+            )}
+            {providers.includes('ms') && (
+              <button
+                onClick={() => handleRevoke('ms')}
+                disabled={revoking === 'ms'}
+                className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs rounded-lg font-medium transition-colors disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                <Unlink size={12} /> {revoking === 'ms' ? '解除中...' : '解除'}
+              </button>
+            )}
+            {!providers.includes('google') && (
+              <button
+                onClick={() => handleOAuthStart('google')}
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg font-medium transition-colors"
+              >
+                Google と同期
+              </button>
+            )}
+            {providers.includes('google') && (
+              <button
+                onClick={() => handleRevoke('google')}
+                disabled={revoking === 'google'}
+                className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs rounded-lg font-medium transition-colors disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                <Unlink size={12} /> {revoking === 'google' ? '解除中...' : '解除'}
+              </button>
+            )}
           </div>
         </div>
       </div>
