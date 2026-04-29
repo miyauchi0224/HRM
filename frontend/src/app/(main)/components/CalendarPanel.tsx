@@ -265,7 +265,7 @@ export default function CalendarPanel() {
               if (dayText) {
                 dayText.classList.add('text-blue-600', 'font-semibold')
               }
-            } else if (isSunday(info.el.date)) {
+            } else if (isSunday(info.date)) {
               info.el.classList.add('bg-red-50', 'cursor-pointer')
               if (dayText) {
                 dayText.classList.add('text-red-600', 'font-semibold')
