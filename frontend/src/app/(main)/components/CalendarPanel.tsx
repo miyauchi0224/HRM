@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import FullCalendar from '@fullcalendar/react'
@@ -23,6 +23,7 @@ interface EditEventData {
 }
 
 export default function CalendarPanel() {
+  const calendarRef = useRef<any>(null)
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth() + 1)
   const [calendarView, setCalendarView] = useState<'dayGridMonth' | 'timeGridWeek' | 'timeGridDay'>('dayGridMonth')
@@ -187,6 +188,13 @@ export default function CalendarPanel() {
     }
   }
 
+  const handleViewChange = (view: 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay') => {
+    if (calendarRef.current) {
+      calendarRef.current.getApi().changeView(view)
+    }
+    setCalendarView(view)
+  }
+
 
   const handleAddEvent = () => {
     if (!eventTitle.trim() || !newEventModal) return
@@ -287,7 +295,7 @@ export default function CalendarPanel() {
         {/* ビュー切り替えボタン */}
         <div className="flex gap-2 mb-4">
           <button
-            onClick={() => setCalendarView('dayGridMonth')}
+            onClick={() => handleViewChange('dayGridMonth')}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               calendarView === 'dayGridMonth'
                 ? 'bg-blue-600 text-white'
@@ -297,7 +305,7 @@ export default function CalendarPanel() {
             <Grid3X3 size={16} /> 月
           </button>
           <button
-            onClick={() => setCalendarView('timeGridWeek')}
+            onClick={() => handleViewChange('timeGridWeek')}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               calendarView === 'timeGridWeek'
                 ? 'bg-blue-600 text-white'
@@ -307,7 +315,7 @@ export default function CalendarPanel() {
             <Columns3 size={16} /> 週
           </button>
           <button
-            onClick={() => setCalendarView('timeGridDay')}
+            onClick={() => handleViewChange('timeGridDay')}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               calendarView === 'timeGridDay'
                 ? 'bg-blue-600 text-white'
@@ -319,6 +327,7 @@ export default function CalendarPanel() {
         </div>
 
         <FullCalendar
+          ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin]}
           initialView={calendarView}
           headerToolbar={{
