@@ -40,6 +40,41 @@
 - **外部同期オプション**: トークン存在時のみ同期（トークン未設定でも機能停止しない）
 - **エクスポート**: 現在表示月のイベントを CSV/ICS で一括ダウンロード
 
+## 実装チェック
+
+### バックエンド
+- [x] CalendarEvent モデル（UUID PK, user FK, title, start/end datetime, provider, external_id, url）
+- [x] create_event()：DB + optional 外部同期
+- [x] update_event()：DB 優先 + external_id 同期
+- [x] delete_event()：DB soft delete + external 同期
+- [x] events()：DB + MS/Google マージ
+- [x] export_events()：CSV/ICS
+- [x] oauth_ms_start/callback：Microsoft OAuth
+- [x] oauth_google_start/callback：Google OAuth
+- [x] oauth_revoke()：連携解除
+- [x] tokens()：接続済みプロバイダー一覧
+
+### フロントエンド
+- [x] CalendarPanel コンポーネント完全実装
+- [x] 祝日表示（赤色）
+- [x] 土曜（青色）/日曜（赤色）色分け
+- [x] ダブルクリック予定追加
+- [x] 予定編集モーダル
+- [x] 予定削除確認
+- [x] CSV/ICS エクスポート
+- [x] OAuth ボタン（MS/Google）
+- [x] 連携解除機能
+- [x] provider セレクト（local/ms/google）
+- [x] 凡例表示
+
+## 動作確認項目
+1. マイグレーション実行後、CalendarEvent テーブルが作成されること
+2. ローカルで予定を作成→DB に保存される
+3. MS/Google トークンがあれば外部カレンダーにも同期される
+4. エクスポート：CSV/ICS で現在月のイベントダウンロード
+5. 予定編集：DB と外部カレンダー両方更新
+6. 予定削除：DB と外部カレンダー両方削除
+
 ---
 
 # 人事管理HRM
