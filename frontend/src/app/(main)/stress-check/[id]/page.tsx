@@ -35,10 +35,11 @@ const SECTION_LABELS: Record<string, { label: string; description: string; color
 }
 
 const CHOICES = [
-  { value: 1, label: 'そうだ' },
-  { value: 2, label: 'まあそうだ' },
-  { value: 3, label: 'ややちがう' },
-  { value: 4, label: 'ちがう' },
+  { value: 1, label: '強くそう思う' },
+  { value: 2, label: 'そう思う' },
+  { value: 3, label: '中立' },
+  { value: 4, label: 'そう思わない' },
+  { value: 5, label: '全くそう思わない' },
 ]
 
 const SECTION_COLOR_MAP: Record<string, string> = {
@@ -242,7 +243,7 @@ export default function StressCheckFormPage() {
                       <span className="text-gray-400 mr-2">Q{q.order}.</span>
                       {q.text}
                     </p>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                       {CHOICES.map((choice) => {
                         const selected = answers[String(q.order)] === choice.value
                         return (
