@@ -63,6 +63,7 @@ export default function Sidebar() {
         <NavLink href="/salary"        label="給与明細"          icon={DollarSign}    active={active('/salary')} />
         <NavLink href="/expense"       label="経費申請"          icon={Receipt}       active={active('/expense')} />
         <NavLink href="/approval"      label="電子稟議"          icon={FileText}      active={active('/approval')} />
+        <NavLink href="/stress-check"  label="ストレスチェック"  icon={HeartPulse}    active={active('/stress-check')} />
         <NavLink href="/notifications" label="通知"              icon={Bell}          active={active('/notifications')} />
         <NavLink href="/chat"          label="チャット"          icon={MessageSquare} active={active('/chat')} />
 
@@ -94,7 +95,6 @@ export default function Sidebar() {
         {isHR && (
           <>
             <SectionLabel>管理部門（労務部）</SectionLabel>
-            <NavLink href="/stress-check" label="ストレスチェック" icon={HeartPulse}   active={active('/stress-check')} />
             <NavLink href="/attendance"   label="36協定状況"       icon={ShieldAlert}  active={active('/attendance')} />
           </>
         )}
