@@ -208,12 +208,18 @@ class CalendarViewSet(viewsets.ViewSet):
         ).order_by('start_datetime')
 
         for event in db_events:
+            # provider を統一フォーマットに変換
+            provider_map = {
+                'ms': 'microsoft',
+                'google': 'google',
+                'local': 'local',
+            }
             events.append({
                 'id': str(event.id),
                 'title': event.title,
                 'start': event.start_datetime.isoformat(),
                 'end': event.end_datetime.isoformat(),
-                'provider': event.get_provider_display().lower(),
+                'provider': provider_map.get(event.provider, 'local'),
                 'url': event.url,
             })
 
