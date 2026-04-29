@@ -29,6 +29,7 @@ interface Employee {
   is_active: boolean
   email?: string
   role?: string
+  roles?: string[]
   gender?: string
   birth_date?: string
   employment_type?: string
@@ -52,6 +53,14 @@ const POSITION_OPTIONS = [
   '社員', '主任', '係長', '次長', '課長', '部長', '取締役', '副社長', '社長',
 ]
 const GENDER_LABEL: Record<string, string> = { male: '男性', female: '女性', other: 'その他' }
+const ROLE_OPTIONS = [
+  { value: 'employee',   label: '社員' },
+  { value: 'supervisor', label: '上司' },
+  { value: 'manager',    label: '管理職' },
+  { value: 'hr',         label: '人事' },
+  { value: 'accounting', label: '経理' },
+  { value: 'admin',      label: 'システム管理者' },
+]
 
 export default function EmployeesPage() {
   const [search, setSearch]     = useState('')
@@ -651,7 +660,7 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
     birth_date: '', gender: 'male',
     hire_date: new Date().toISOString().slice(0, 10),
     department: '', position: '',
-    grade: 1, employment_type: 'full_time', role: 'employee',
+    grade: 1, employment_type: 'full_time', roles: ['employee'] as string[],
   })
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<{ email: string; temp_password: string } | null>(null)
@@ -723,21 +732,33 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
         <div className="overflow-y-auto p-6 space-y-4">
           {/* ログイン情報 */}
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ログイン情報</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3">
             <Field label="メールアドレス *">
               <Input k="email" type="email" placeholder="example@company.com" />
             </Field>
-            <Field label="ロール">
-              <select value={form.role} onChange={(e) => set('role', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                <option value="employee">社員</option>
-                <option value="supervisor">上司</option>
-                <option value="manager">管理職</option>
-                <option value="hr">人事</option>
-                <option value="accounting">経理</option>
-                <option value="customer">顧客</option>
-                <option value="admin">システム管理者</option>
-              </select>
+            <Field label="ロール（複数選択可） *">
+              <div className="grid grid-cols-3 gap-2">
+                {ROLE_OPTIONS.map(opt => (
+                  <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(form as any).roles.includes(opt.value)}
+                      onChange={(e) => {
+                        const roles = (form as any).roles as string[]
+                        if (e.target.checked) {
+                          set('roles', [...roles, opt.value])
+                        } else {
+                          if (roles.length > 1) {
+                            set('roles', roles.filter(r => r !== opt.value))
+                          }
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-sm">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
             </Field>
           </div>
 
