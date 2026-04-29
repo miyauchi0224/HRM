@@ -23,7 +23,6 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
         EMPLOYEE   = 'employee',   '社員'
-        SUPERVISOR = 'supervisor', '上司'
         MANAGER    = 'manager',    '管理職'
         HR         = 'hr',         '人事'
         ACCOUNTING = 'accounting', '経理'
@@ -76,11 +75,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     def is_supervisor(self):
         """
         上司レベル以上（直属部下の勤怠・休暇・MBOの参照・承認が可能）
-        supervisor / manager / hr / accounting / admin が対象
+        manager / hr / accounting / admin が対象（supervisor ロール廃止により manager 以上）
         """
         return any(r in self.roles for r in (
-            self.Role.SUPERVISOR, self.Role.MANAGER,
-            self.Role.HR, self.Role.ACCOUNTING, self.Role.ADMIN,
+            self.Role.MANAGER, self.Role.HR, self.Role.ACCOUNTING, self.Role.ADMIN,
         ))
 
     @property
