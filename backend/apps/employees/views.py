@@ -16,7 +16,7 @@ from apps.accounts.permissions import IsNotCustomer, IsHR
 from .models import Employee, EmergencyContact
 from .serializers import (
     EmployeeListSerializer, EmployeeDetailSerializer, CreateEmployeeSerializer,
-    EmergencyContactSerializer,
+    EmergencyContactSerializer, SelfUpdateSerializer,
 )
 from apps.accounts.models import User
 from apps.common.mixins import SoftDeleteViewSetMixin
@@ -31,11 +31,14 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [IsNotCustomer]
 
     def get_queryset(self):
-        user  = self.request.user
-        qs    = Employee.objects.select_related('user').prefetch_related(
+        user = self.request.user
+        qs   = Employee.objects.select_related('user').prefetch_related(
             'emergency_contacts', 'family_members'
         )
-        # 社員は自分のみ参照可
+        # ?for_project=true の場合はプロジェクト管理者選択用として全社員（顧客含む）を返す
+        if self.request.query_params.get('for_project') == 'true':
+            return qs
+        # 通常: 管理職未満は自分のレコードのみ参照可
         if not user.is_manager:
             return qs.filter(user=user)
         return qs
@@ -98,17 +101,20 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = CreateEmployeeSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
         d = serializer.validated_data
 
         # User作成（仮パスワードを発行）
-        import secrets
+        import secrets, uuid
         temp_password = secrets.token_urlsafe(12)
         roles = d.get('roles', [User.Role.EMPLOYEE])
+        email = d.get('email', '') or f'customer_{uuid.uuid4().hex[:8]}@noreply.local'
         user = User.objects.create_user(
-            email=d['email'],
+            email=email,
             password=temp_password,
-            role=roles[0],  # 後方互換性のため最初のロール
+            role=roles[0],
             roles=roles,
         )
         # Employee作成
@@ -116,9 +122,9 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             user=user,
             employee_number=d['employee_number'],
             last_name=d['last_name'],
-            first_name=d['first_name'],
-            last_name_kana=d['last_name_kana'],
-            first_name_kana=d['first_name_kana'],
+            first_name=d.get('first_name', ''),
+            last_name_kana=d.get('last_name_kana', ''),
+            first_name_kana=d.get('first_name_kana', ''),
             birth_date=d.get('birth_date'),
             gender=d.get('gender'),
             hire_date=d.get('hire_date'),
@@ -127,10 +133,11 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             grade=d.get('grade', 1),
             employment_type=d.get('employment_type', Employee.EmploymentType.FULL_TIME),
         )
+        has_real_email = not user.email.endswith('@noreply.local')
         return Response({
-            'message': f'社員アカウントを作成しました',
-            'email': user.email,
-            'temp_password': temp_password,  # 初回ログイン後に変更を促す
+            'message': '社員アカウントを作成しました',
+            'email': user.email if has_real_email else None,
+            'temp_password': temp_password if has_real_email else None,
         }, status=status.HTTP_201_CREATED)
 
     def _can_edit_employee(self, request, employee):
@@ -186,6 +193,26 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get', 'patch'], url_path='me')
+    def me(self, request):
+        """
+        GET  /api/v1/employees/me/ - 自分のプロフィールを取得（緊急連絡先含む）
+        PATCH /api/v1/employees/me/ - 自分のプロフィールを更新（安全フィールドのみ）
+        """
+        employee = getattr(request.user, 'employee', None)
+        if not employee:
+            return Response({'error': '社員情報が登録されていません'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'GET':
+            return Response(SelfUpdateSerializer(employee).data)
+
+        # PATCH: 自分自身の更新のみ許可
+        serializer = SelfUpdateSerializer(employee, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        # 更新後のデータ（緊急連絡先含む）を返す
+        return Response(SelfUpdateSerializer(employee).data)
 
     @action(detail=True, methods=['post'], url_path='upload-avatar',
             parser_classes=[MultiPartParser, FormParser])

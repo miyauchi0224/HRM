@@ -83,11 +83,12 @@ export default function Sidebar() {
         <NavLink href="/onboarding" label="オンボーディング"  icon={ClipboardList}    active={active('/onboarding')} />
         <NavLink href="/ai"         label="AIアシスタント"    icon={Bot}              active={active('/ai')} />
 
-        {/* ━━━ 上司の機能・承認機能 ━━━ */}
-        {isSupervisor && (
+        {/* ━━━ 社員 ━━━ */}
+        {(isHR || isManager || isSupervisor) && (
           <>
-            <SectionLabel>承認機能（上司）</SectionLabel>
-            <NavLink href="/employees/org-chart" label="組織図"  icon={Building2}  active={active('/employees/org-chart')} />
+            <SectionLabel>社員</SectionLabel>
+            <NavLink href="/employees"           label="社員情報" icon={Users}     active={active('/employees')} />
+            <NavLink href="/employees/org-chart" label="組織図"   icon={Building2} active={active('/employees/org-chart')} />
           </>
         )}
 
@@ -104,22 +105,13 @@ export default function Sidebar() {
         {isHR && (
           <>
             <SectionLabel>管理部門（人事部）</SectionLabel>
-            <NavLink href="/employees"    label="社員情報"          icon={Users}     active={active('/employees')} />
-            <NavLink href="/recruitment"  label="採用管理"          icon={UserPlus}  active={active('/recruitment')} />
+            <NavLink href="/recruitment"  label="採用管理"           icon={UserPlus}  active={active('/recruitment')} />
             <NavLink href="/analytics"    label="分析ダッシュボード" icon={BarChart2} active={active('/analytics')} />
           </>
         )}
 
         {/* ━━━ 管理職 ━━━ */}
-        {isManager && !isHR && (
-          <>
-            <SectionLabel>管理部門（管理職）</SectionLabel>
-            <NavLink href="/employees"           label="社員情報" icon={Users}     active={active('/employees')} />
-            <NavLink href="/employees/org-chart" label="組織図"   icon={Building2} active={active('/employees/org-chart')} />
-            <NavLink href="/assets"              label="資産管理" icon={Package}   active={active('/assets')} />
-          </>
-        )}
-        {isHR && (
+        {isManager && (
           <>
             <SectionLabel>管理部門（管理職）</SectionLabel>
             <NavLink href="/assets" label="資産管理" icon={Package} active={active('/assets')} />

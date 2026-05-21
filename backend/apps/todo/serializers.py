@@ -26,3 +26,16 @@ class DailyReportSerializer(serializers.ModelSerializer):
             'employee_name', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'employee_name', 'created_at', 'updated_at']
+
+    def validate_report_date(self, value):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            employee = getattr(request.user, 'employee', None)
+            if employee:
+                qs = DailyReport.objects.filter(employee=employee, report_date=value)
+                # 更新時は自身を除外
+                if self.instance:
+                    qs = qs.exclude(pk=self.instance.pk)
+                if qs.exists():
+                    raise serializers.ValidationError('この日付の日報は既に作成済みです')
+        return value

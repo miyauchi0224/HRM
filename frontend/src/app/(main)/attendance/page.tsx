@@ -20,6 +20,24 @@ function addMonths(ym: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+// 曜日を返す（月〜日）
+const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土']
+function getDayOfWeek(dateStr: string): string {
+  // タイムゾーンずれを防ぐため UTC 0:00 で解析
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return DAY_NAMES[new Date(y, m - 1, d).getDay()]
+}
+
+// 日付セル用: "4/1(水)" 形式で返す
+function formatDateWithDay(dateStr: string): string {
+  const [, m, d] = dateStr.split('-').map(Number)
+  const dow = getDayOfWeek(dateStr)
+  return `${m}/${d}(${dow})`
+}
+
+// 祝日マップ型
+type HolidayMap = Record<string, string> // date → name
+
 interface ProjectEntry {
   project: string   // project UUID
   minutes: number
@@ -31,6 +49,7 @@ interface EditData {
   stamped_clock_out: string
   clock_out:         string
   break_minutes:     number
+  note:              string
   project_records:   ProjectEntry[]
 }
 
@@ -42,7 +61,7 @@ export default function AttendancePage() {
   const [activeTab, setActiveTab]       = useState<Tab>('clock')
   const [yearMonth, setYearMonth]       = useState(() => new Date().toISOString().slice(0, 7))
   const [editId, setEditId]             = useState<string | null>(null)
-  const [editData, setEditData]         = useState<EditData>({ stamped_clock_in: '', clock_in: '', stamped_clock_out: '', clock_out: '', break_minutes: 60, project_records: [] })
+  const [editData, setEditData]         = useState<EditData>({ stamped_clock_in: '', clock_in: '', stamped_clock_out: '', clock_out: '', break_minutes: 60, note: '', project_records: [] })
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -55,6 +74,18 @@ export default function AttendancePage() {
     queryKey: ['projects'],
     queryFn: () => api.get('/api/v1/attendance/projects/').then((r) => r.data.results ?? r.data),
   })
+
+  // 祝日データを月ごとに取得
+  const [ymYear, ymMonth] = yearMonth.split('-')
+  const { data: holidayData } = useQuery<{ holidays: { date: string; name: string }[] }>({
+    queryKey: ['holidays', yearMonth],
+    queryFn: () => api.get(`/api/v1/calendar/holidays/?year=${ymYear}&month=${Number(ymMonth)}`).then((r) => r.data),
+    staleTime: 1000 * 60 * 60, // 1時間キャッシュ
+  })
+  // date → name のマップ
+  const holidayMap: HolidayMap = Object.fromEntries(
+    (holidayData?.holidays ?? []).map(({ date, name }) => [date, name])
+  )
 
   const todayRecord = records.find((r: any) => r.date === today)
 
@@ -85,12 +116,15 @@ export default function AttendancePage() {
 
   const startEdit = (r: any) => {
     setEditId(r.id)
+    // 備考が未入力の場合、祝日名をデフォルトとして設定
+    const defaultNote = r.note ?? (holidayMap[r.date] ? holidayMap[r.date] : '')
     setEditData({
       stamped_clock_in:  r.stamped_clock_in  ?? '',
       clock_in:          r.clock_in          ?? '',
       stamped_clock_out: r.stamped_clock_out ?? '',
       clock_out:         r.clock_out         ?? '',
       break_minutes:     r.break_minutes     ?? 60,
+      note:              defaultNote,
       project_records:   (r.project_records ?? []).map((pr: any) => ({
         project: pr.project,
         minutes: pr.minutes,
@@ -108,6 +142,7 @@ export default function AttendancePage() {
         stamped_clock_out: editData.stamped_clock_out || null,
         clock_out:         editData.clock_out         || null,
         break_minutes:     editData.break_minutes,
+        note:              editData.note,
         project_records:   editData.project_records.filter((pr) => pr.project),
       },
     })
@@ -291,18 +326,37 @@ export default function AttendancePage() {
                     <th className="text-left py-2 font-medium">退勤時刻<br/><span className="text-gray-400 font-normal">勤務終了</span></th>
                     <th className="text-left py-2 font-medium">休憩(分)</th>
                     <th className="text-left py-2 font-medium">プロジェクト</th>
+                    <th className="text-left py-2 font-medium">備考</th>
                     <th className="text-left py-2 font-medium">労働時間</th>
                     <th className="text-left py-2 font-medium">残業</th>
                     <th className="py-2 w-16" />
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((r: any) => (
-                    <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50" onDoubleClick={() => editId !== r.id && startEdit(r)} title="ダブルクリックで編集">
+                  {records.map((r: any) => {
+                    const isHoliday  = !!holidayMap[r.date]
+                    const dow        = getDayOfWeek(r.date)
+                    const isSaturday = dow === '土'
+                    const isSunday   = dow === '日'
+                    // 行全体の背景: 祝日・日曜→薄赤、土曜→薄青
+                    const rowBg = isHoliday || isSunday ? 'bg-red-50 hover:bg-red-100'
+                                : isSaturday            ? 'bg-blue-50 hover:bg-blue-100'
+                                :                         'hover:bg-gray-50'
+                    // 日付テキスト色
+                    const dateColor = isHoliday || isSunday ? 'text-red-600 font-semibold'
+                                    : isSaturday            ? 'text-blue-600 font-semibold'
+                                    :                         'text-gray-600'
+                    return (
+                    <tr key={r.id} className={`border-b border-gray-50 ${rowBg}`} onDoubleClick={() => editId !== r.id && startEdit(r)} title="ダブルクリックで編集">
                       {editId === r.id ? (
                         <>
                           {/* 編集行 */}
-                          <td className="py-2 pr-2 text-gray-600 text-xs whitespace-nowrap">{r.date}</td>
+                          <td className={`py-2 pr-2 text-xs whitespace-nowrap ${dateColor}`}>
+                            <span>{formatDateWithDay(r.date)}</span>
+                            {isHoliday && (
+                              <span className="block text-red-400 text-[10px] leading-tight">{holidayMap[r.date]}</span>
+                            )}
+                          </td>
                           <td className="py-1 pr-1">
                             <input
                               type="time"
@@ -393,8 +447,15 @@ export default function AttendancePage() {
                               )}
                             </div>
                           </td>
-                          <td className="py-1 text-gray-400 text-xs">—</td>
-                          <td className="py-1 text-gray-400 text-xs">—</td>
+                          <td className="py-1 pr-1">
+                            <input
+                              type="text"
+                              value={editData.note}
+                              onChange={(e) => setEditData((d) => ({ ...d, note: e.target.value }))}
+                              placeholder="備考"
+                              className="w-[120px] px-1.5 py-1 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            />
+                          </td>
                           <td className="py-1 text-gray-400 text-xs">—</td>
                           <td className="py-1 text-gray-400 text-xs">—</td>
                           <td className="py-1">
@@ -420,7 +481,12 @@ export default function AttendancePage() {
                       ) : (
                         <>
                           {/* 表示行 */}
-                          <td className="py-2 text-xs text-gray-600 whitespace-nowrap">{r.date}</td>
+                          <td className={`py-2 text-xs whitespace-nowrap ${dateColor}`}>
+                            <span>{formatDateWithDay(r.date)}</span>
+                            {isHoliday && (
+                              <span className="block text-red-400 text-[10px] leading-tight">{holidayMap[r.date]}</span>
+                            )}
+                          </td>
                           <td className="py-2 text-xs whitespace-nowrap text-orange-600 font-medium">
                             {r.stamped_clock_in ?? '—'}
                           </td>
@@ -442,6 +508,11 @@ export default function AttendancePage() {
                                     <span className="text-gray-400 ml-0.5">{pr.minutes}m</span>
                                   </span>
                                 ))
+                              : '—'}
+                          </td>
+                          <td className="py-2 text-xs text-gray-500 max-w-[160px]">
+                            {r.note
+                              ? <span className="truncate block" title={r.note}>{r.note}</span>
                               : '—'}
                           </td>
                           <td className="py-2 text-xs">
@@ -466,7 +537,8 @@ export default function AttendancePage() {
                         </>
                       )}
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             ) : (
@@ -769,9 +841,10 @@ function ProjectsPanel() {
     queryFn: () => api.get('/api/v1/attendance/projects/').then((r) => r.data.results ?? r.data),
   })
 
+  // プロジェクト管理者選択用: 顧客ロール含む全社員
   const { data: employees = [] } = useQuery<any[]>({
-    queryKey: ['employees-list'],
-    queryFn: () => api.get('/api/v1/employees/').then((r) => r.data.results ?? r.data),
+    queryKey: ['employees-for-project'],
+    queryFn: () => api.get('/api/v1/employees/?for_project=true').then((r) => r.data.results ?? r.data),
   })
 
   const deleteMut = useMutation({
@@ -1088,9 +1161,10 @@ function GanttPanel() {
     queryKey: ['projects-all'],
     queryFn: () => api.get('/api/v1/attendance/projects/').then(r => r.data.results ?? r.data),
   })
+  // ガントチャートのタスク担当者用: 顧客ロール含む全社員
   const { data: employees = [] } = useQuery<any[]>({
-    queryKey: ['employees-mini'],
-    queryFn: () => api.get('/api/v1/employees/').then(r => r.data.results ?? r.data),
+    queryKey: ['employees-for-project'],
+    queryFn: () => api.get('/api/v1/employees/?for_project=true').then(r => r.data.results ?? r.data),
   })
   const { data: ganttData, isLoading } = useQuery<any>({
     queryKey: ['gantt', selectedProjectId],

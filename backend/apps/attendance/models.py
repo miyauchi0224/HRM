@@ -30,10 +30,6 @@ class Project(SoftDeleteModel):
     code        = models.CharField(max_length=50, unique=True, verbose_name='件番')
     name        = models.CharField(max_length=200, verbose_name='プロジェクト名')
     description = models.TextField(blank=True, verbose_name='概要')
-    manager      = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True,
-                                     related_name='managed_projects', verbose_name='主管理者')
-    sub_managers = models.ManyToManyField(Employee, blank=True,
-                                          related_name='sub_managed_projects', verbose_name='従管理者')
     is_active    = models.BooleanField(default=True)
     start_date  = models.DateField(null=True, blank=True)
     end_date    = models.DateField(null=True, blank=True)

@@ -41,13 +41,14 @@ class DocumentViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
 
         employee = getattr(user, 'employee', None)
         from django.db.models import Q
-        from apps.attendance.models import AttendanceRecord
 
         # 社員が所属するプロジェクトIDを取得
+        # project_id は AttendanceProjectRecord（中間テーブル）経由で取得
         project_ids = []
         if employee:
+            from apps.attendance.models import AttendanceProjectRecord
             project_ids = list(
-                AttendanceRecord.objects.filter(employee=employee)
+                AttendanceProjectRecord.objects.filter(attendance__employee=employee)
                 .values_list('project_id', flat=True)
                 .distinct()
             )

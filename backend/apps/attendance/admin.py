@@ -4,7 +4,7 @@ from .models import Project, AttendanceRecord, AttendanceProjectRecord, Attendan
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display  = ['code', 'name', 'manager', 'is_active', 'start_date', 'end_date']
+    list_display  = ['code', 'name', 'is_active', 'start_date', 'end_date']
     list_filter   = ['is_active']
     search_fields = ['code', 'name']
 

@@ -1,6 +1,7 @@
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from apps.accounts.permissions import IsHR, IsNotCustomer
 
@@ -9,17 +10,38 @@ from .serializers import (EvaluationPeriodSerializer, EvaluationQuestionSerializ
                           Evaluation360Serializer)
 from apps.common.mixins import SoftDeleteViewSetMixin
 
+# 読み取り専用アクション（全ログインユーザーに許可）
+_READ_ACTIONS = ('list', 'retrieve')
+
 
 class EvaluationPeriodViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
+    """
+    評価期間マスタ。
+    GET（一覧・詳細）: 全ログインユーザーが参照可能（評価フォームの選択肢に必要）
+    POST / PATCH / DELETE: HR 以上のみ操作可能
+    """
     queryset = EvaluationPeriod.objects.all()
     serializer_class = EvaluationPeriodSerializer
-    permission_classes = [IsHR]
+
+    def get_permissions(self):
+        if self.action in _READ_ACTIONS:
+            return [IsAuthenticated()]
+        return [IsHR()]
 
 
 class EvaluationQuestionViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
+    """
+    評価質問マスタ。
+    GET（一覧・詳細）: 全ログインユーザーが参照可能（評価フォームの選択肢に必要）
+    POST / PATCH / DELETE: HR 以上のみ操作可能
+    """
     queryset = EvaluationQuestion.objects.filter(is_active=True)
     serializer_class = EvaluationQuestionSerializer
-    permission_classes = [IsHR]
+
+    def get_permissions(self):
+        if self.action in _READ_ACTIONS:
+            return [IsAuthenticated()]
+        return [IsHR()]
 
 
 class Evaluation360ViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):

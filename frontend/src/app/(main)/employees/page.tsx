@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
@@ -652,29 +652,72 @@ function WorkplaceSection({ emp, canEdit, onSaved }: { emp: Employee; canEdit: b
   )
 }
 
+// ===== フォーム用の汎用コンポーネント（関数外部に定義することで不要な再マウントを防ぐ）=====
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function FormInput({ value, onChangeValue, inputRef, ...rest }: {
+  value: string | number
+  onChangeValue: (v: string) => void
+  inputRef?: React.RefObject<HTMLInputElement>
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'ref'>) {
+  return (
+    <input
+      ref={inputRef}
+      {...rest}
+      value={value}
+      onChange={(e) => onChangeValue(e.target.value)}
+      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+    />
+  )
+}
+
 // ===== 新規社員登録モーダル =====
 function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({
-    email: '', employee_number: '',
-    last_name: '', first_name: '',
-    last_name_kana: '', first_name_kana: '',
-    birth_date: '', gender: 'male',
-    hire_date: new Date().toISOString().slice(0, 10),
-    department: '', position: '',
-    grade: 1, employment_type: 'full_time', roles: ['employee'] as string[],
-  })
+  // input の値は state で管理せず formRef + FormData で収集（再レンダリングによるフォーカス喪失を防ぐため）
+  const [roles, setRoles] = useState<string[]>(['employee'])
+  const [gender, setGender] = useState('male')
+  const [position, setPosition] = useState('')
+  const [employmentType, setEmploymentType] = useState('full_time')
   const [saving, setSaving] = useState(false)
-  const [result, setResult] = useState<{ email: string; temp_password: string } | null>(null)
-
-  const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }))
+  const [result, setResult] = useState<{ email: string | null; temp_password: string | null } | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
 
   const save = async () => {
+    if (!formRef.current) return
     setSaving(true)
     try {
-      const res = await api.post('/api/v1/employees/', form)
+      const fd = new FormData(formRef.current)
+      const str  = (k: string) => (fd.get(k) as string) || ''
+      const date = (k: string) => (fd.get(k) as string) || null  // 空文字は null に変換（DateField）
+      const body: Record<string, unknown> = {
+        email:           str('email') || undefined,
+        employee_number: str('employee_number'),
+        last_name:       str('last_name'),
+        first_name:      str('first_name'),
+        last_name_kana:  str('last_name_kana'),
+        first_name_kana: str('first_name_kana'),
+        birth_date:      date('birth_date'),
+        hire_date:       date('hire_date'),
+        department:      str('department'),
+        grade:           Number(fd.get('grade') ?? 1),
+        gender,
+        position,
+        employment_type: employmentType,
+        roles,
+      }
+      console.log('送信データ:', JSON.stringify(body, null, 2))
+      const res = await api.post('/api/v1/employees/', body)
       setResult(res.data)
     } catch (e: any) {
       const data = e.response?.data
+      console.error('登録エラー詳細:', JSON.stringify(data, null, 2))
       const msg = data?.error ?? Object.values(data ?? {}).flat().join('\n') ?? '登録に失敗しました'
       alert(msg)
     } finally {
@@ -689,14 +732,20 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
           <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-2xl">✓</span>
           </div>
-          <h2 className="font-bold text-gray-800 mb-1">社員登録完了</h2>
-          <p className="text-sm text-gray-500 mb-4">以下の情報を本人に共有してください</p>
-          <div className="bg-gray-50 rounded-lg p-4 text-left text-sm space-y-2 mb-6">
-            <p><span className="text-gray-400">メール：</span>{result.email}</p>
-            <p><span className="text-gray-400">仮パスワード：</span>
-              <code className="font-mono bg-yellow-100 px-1 rounded">{result.temp_password}</code>
-            </p>
-          </div>
+          <h2 className="font-bold text-gray-800 mb-1">登録完了</h2>
+          {result.email ? (
+            <>
+              <p className="text-sm text-gray-500 mb-4">以下の情報を本人に共有してください</p>
+              <div className="bg-gray-50 rounded-lg p-4 text-left text-sm space-y-2 mb-6">
+                <p><span className="text-gray-400">メール：</span>{result.email}</p>
+                <p><span className="text-gray-400">仮パスワード：</span>
+                  <code className="font-mono bg-yellow-100 px-1 rounded">{result.temp_password}</code>
+                </p>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-gray-500 mb-6">顧客情報を登録しました</p>
+          )}
           <button onClick={onSaved}
             className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
             閉じる
@@ -706,23 +755,8 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
     )
   }
 
-  const isCustomer = form.roles.includes('customer')
-
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      {children}
-    </div>
-  )
-
-  const Input = ({ k, ...rest }: { k: string } & React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input
-      {...rest}
-      value={(form as any)[k]}
-      onChange={(e) => set(k, e.target.value)}
-      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-    />
-  )
+  const isCustomer = roles.includes('customer')
+  const cls = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm'
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -732,12 +766,12 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
         </div>
 
-        <div className="overflow-y-auto p-6 space-y-4">
+        <form ref={formRef} className="overflow-y-auto p-6 space-y-4" onSubmit={(e) => e.preventDefault()}>
           {/* ログイン情報 */}
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ログイン情報</p>
           <div className="grid gap-3">
-            <Field label="メールアドレス *">
-              <Input k="email" type="email" placeholder="example@company.com" autoFocus />
+            <Field label={`メールアドレス ${isCustomer ? '' : '*'}`}>
+              <input name="email" type="email" placeholder="example@company.com" autoFocus className={cls} />
             </Field>
             <Field label="ロール（複数選択可） *">
               <div className="grid grid-cols-3 gap-2">
@@ -745,16 +779,13 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
                   <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={(form as any).roles.includes(opt.value)}
+                      checked={roles.includes(opt.value)}
                       onChange={(e) => {
-                        const roles = (form as any).roles as string[]
-                        if (e.target.checked) {
-                          set('roles', [...roles, opt.value])
-                        } else {
-                          if (roles.length > 1) {
-                            set('roles', roles.filter(r => r !== opt.value))
-                          }
-                        }
+                        setRoles(prev =>
+                          e.target.checked
+                            ? [...prev, opt.value]
+                            : prev.length > 1 ? prev.filter(r => r !== opt.value) : prev
+                        )
                       }}
                       className="rounded"
                     />
@@ -769,23 +800,21 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
           {/* 基本情報 */}
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-2">基本情報</p>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="社員番号 *"><Input k="employee_number" placeholder="EMP002" /></Field>
+            <Field label="社員番号 *"><input name="employee_number" placeholder="EMP002" className={cls} /></Field>
             {!isCustomer && (
               <Field label="雇用形態">
-                <select value={form.employment_type} onChange={(e) => set('employment_type', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <select value={employmentType} onChange={(e) => setEmploymentType(e.target.value)} className={cls}>
                   {Object.entries(EMPLOYMENT_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
               </Field>
             )}
-            <Field label={`姓 ${isCustomer ? '' : '*'}`}><Input k="last_name" placeholder="山田" /></Field>
-            <Field label={`名 ${isCustomer ? '' : '*'}`}><Input k="first_name" placeholder="太郎" /></Field>
-            <Field label={`姓（カナ）${isCustomer ? '' : '*'}`}><Input k="last_name_kana" placeholder="ヤマダ" /></Field>
-            <Field label={`名（カナ）${isCustomer ? '' : '*'}`}><Input k="first_name_kana" placeholder="タロウ" /></Field>
-            <Field label={`生年月日 ${isCustomer ? '' : '*'}`}><Input k="birth_date" type="date" /></Field>
+            <Field label="姓 *"><input name="last_name" placeholder="山田" className={cls} /></Field>
+            <Field label={`名 ${isCustomer ? '' : '*'}`}><input name="first_name" placeholder="太郎" className={cls} /></Field>
+            <Field label={`姓（カナ）${isCustomer ? '' : '*'}`}><input name="last_name_kana" placeholder="ヤマダ" className={cls} /></Field>
+            <Field label={`名（カナ）${isCustomer ? '' : '*'}`}><input name="first_name_kana" placeholder="タロウ" className={cls} /></Field>
+            <Field label={`生年月日 ${isCustomer ? '' : '*'}`}><input name="birth_date" type="date" className={cls} /></Field>
             <Field label="性別">
-              <select value={form.gender} onChange={(e) => set('gender', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <select value={gender} onChange={(e) => setGender(e.target.value)} className={cls}>
                 {Object.entries(GENDER_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </Field>
@@ -794,22 +823,21 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
           {/* 所属情報 */}
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-2">所属</p>
           <div className="grid grid-cols-2 gap-3">
-            <Field label={`部署 ${isCustomer ? '' : '*'}`}><Input k="department" placeholder="開発部" /></Field>
+            <Field label={`部署 ${isCustomer ? '' : '*'}`}><input name="department" placeholder="開発部" className={cls} /></Field>
             <Field label={`役職 ${isCustomer ? '' : '*'}`}>
-              <select value={form.position} onChange={(e) => set('position', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <select value={position} onChange={(e) => setPosition(e.target.value)} className={cls}>
                 <option value="">選択してください</option>
                 {POSITION_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </Field>
             <Field label="等級">
-              <input type="number" min={1} max={10} value={form.grade}
-                onChange={(e) => set('grade', Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              <input name="grade" type="number" min={1} max={10} defaultValue={1} className={cls} />
             </Field>
-            <Field label={`入社日 ${isCustomer ? '' : '*'}`}><Input k="hire_date" type="date" /></Field>
+            <Field label={`入社日 ${isCustomer ? '' : '*'}`}>
+              <input name="hire_date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className={cls} />
+            </Field>
           </div>
-        </div>
+        </form>
 
         <div className="flex gap-3 p-6 border-t border-gray-100">
           <button onClick={onClose}

@@ -77,17 +77,36 @@ class EmployeeDetailSerializer(serializers.ModelSerializer):
         return obj.avatar.url
 
 
+class SelfUpdateSerializer(serializers.ModelSerializer):
+    """
+    本人が自分のプロフィールを更新するためのシリアライザー。
+    HR のみ変更すべき項目（社員番号・等級・銀行口座等）は含めない。
+    緊急連絡先は別エンドポイントで管理するため read_only で返すのみ。
+    """
+    emergency_contacts = EmergencyContactSerializer(many=True, read_only=True)
+
+    class Meta:
+        model  = Employee
+        fields = [
+            'id', 'last_name', 'first_name', 'last_name_kana', 'first_name_kana',
+            'phone', 'personal_email',
+            'zip_code', 'address', 'nearest_station', 'commute_route',
+            'emergency_contacts',
+        ]
+        read_only_fields = ['id']
+
+
 class CreateEmployeeSerializer(serializers.Serializer):
     """社員＋Userアカウントの同時作成用"""
-    email           = serializers.EmailField()
+    email           = serializers.CharField(max_length=254, required=False, allow_blank=True)
     employee_number = serializers.CharField(max_length=20)
     last_name       = serializers.CharField(max_length=50)
-    first_name      = serializers.CharField(max_length=50)
-    last_name_kana  = serializers.CharField(max_length=50)
-    first_name_kana = serializers.CharField(max_length=50)
-    birth_date      = serializers.DateField(required=False, allow_null=True)
+    first_name      = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    last_name_kana  = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    first_name_kana = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    birth_date      = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     gender          = serializers.ChoiceField(choices=Employee.Gender.choices, required=False, allow_null=True)
-    hire_date       = serializers.DateField(required=False, allow_null=True)
+    hire_date       = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     department      = serializers.CharField(max_length=100, required=False, allow_blank=True)
     position        = serializers.CharField(max_length=100, required=False, allow_blank=True)
     phone           = serializers.CharField(max_length=20, required=False, allow_blank=True)
@@ -98,36 +117,63 @@ class CreateEmployeeSerializer(serializers.Serializer):
     roles           = serializers.ListField(
         child=serializers.ChoiceField(choices=User.Role.choices),
         min_length=1,
-        default=list,
+        required=True,
     )
 
     def validate(self, data):
+        from django.core.validators import validate_email as django_validate_email
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        import re
+
+        # 空文字の日付フィールドを None に正規化
+        for field in ('birth_date', 'hire_date'):
+            val = data.get(field)
+            if not val:
+                data[field] = None
+            else:
+                # YYYY-MM-DD 形式チェック
+                if not re.match(r'^\d{4}-\d{2}-\d{2}$', val):
+                    raise serializers.ValidationError({field: '日付は YYYY-MM-DD 形式で入力してください'})
+                from datetime import date as date_type
+                try:
+                    from datetime import datetime
+                    data[field] = datetime.strptime(val, '%Y-%m-%d').date()
+                except ValueError:
+                    raise serializers.ValidationError({field: '無効な日付です'})
+
+        # メールアドレスの正規化と検証
+        email = data.get('email', '') or ''
+        try:
+            django_validate_email(email)
+            if User.objects.filter(email=email).exists():
+                raise serializers.ValidationError({'email': 'このメールアドレスは既に使用されています'})
+            data['email'] = email
+        except DjangoValidationError:
+            data['email'] = ''  # 無効なメールは空文字に正規化（顧客の場合は後でダミー生成）
+
         roles = data.get('roles', [])
         is_customer = User.Role.CUSTOMER in roles
 
-        # 顧客以外は必須フィールドをチェック
+        # 顧客以外は追加の必須フィールドをチェック
         if not is_customer:
             required_fields = {
-                'birth_date': '生年月日',
-                'gender': '性別',
-                'hire_date': '入社日',
-                'department': '部門',
-                'position': '職位',
-                'phone': '電話番号',
+                'first_name':      '名',
+                'last_name_kana':  '姓（カナ）',
+                'first_name_kana': '名（カナ）',
+                'birth_date':      '生年月日',
+                'hire_date':       '入社日',
+                'department':      '部署',
             }
             errors = {}
             for field, label in required_fields.items():
                 if not data.get(field):
                     errors[field] = f'{label}は必須です'
+            if not data.get('email'):
+                errors['email'] = 'メールアドレスは必須です'
             if errors:
                 raise serializers.ValidationError(errors)
 
         return data
-
-    def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError('このメールアドレスは既に使用されています')
-        return value
 
     def validate_employee_number(self, value):
         if Employee.objects.filter(employee_number=value).exists():

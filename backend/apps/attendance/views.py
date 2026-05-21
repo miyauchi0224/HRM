@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from django.http import HttpResponse
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
-from .models import AttendanceRecord, AttendanceProjectRecord, AttendanceModRequest, Project, ProjectTask
+from .models import AttendanceRecord, AttendanceProjectRecord, AttendanceModRequest, Project, ProjectTask, ProjectManager
 from .serializers import (
     AttendanceRecordSerializer, ClockInSerializer, ClockOutSerializer,
     AttendanceModRequestSerializer, ProjectSerializer, AttendanceSummarySerializer,
@@ -146,18 +146,18 @@ class ProjectViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
                     errors.append({'row': i, 'error': '件番・プロジェクト名は必須です'})
                     continue
                 # 主管理者
-                manager = None
+                primary_emp = None
                 main_emp_no = row.get('主管理者社員番号', '').strip()
                 if main_emp_no:
-                    manager = Employee.objects.filter(employee_number=main_emp_no).first()
+                    primary_emp = Employee.objects.filter(employee_number=main_emp_no).first()
                 # 従管理者
-                sub_ids = []
+                secondary_emps = []
                 sub_emp_nos = row.get('従管理者社員番号（複数はセミコロン区切り）', '').strip()
                 if sub_emp_nos:
                     for emp_no in sub_emp_nos.split(';'):
                         emp = Employee.objects.filter(employee_number=emp_no.strip()).first()
                         if emp:
-                            sub_ids.append(emp.id)
+                            secondary_emps.append(emp)
                 start_date = row.get('開始日(YYYY-MM-DD)', '').strip() or None
                 end_date   = row.get('終了日(YYYY-MM-DD)', '').strip() or None
                 description = row.get('概要', '').strip()
@@ -165,14 +165,22 @@ class ProjectViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
                     code=code,
                     defaults={
                         'name': name,
-                        'manager': manager,
                         'start_date': start_date,
                         'end_date': end_date,
                         'description': description,
                     }
                 )
-                if sub_ids:
-                    proj.sub_managers.set(sub_ids)
+                # M2M 管理者を ProjectManager に設定
+                if primary_emp:
+                    ProjectManager.objects.update_or_create(
+                        project=proj, employee=primary_emp,
+                        defaults={'role': ProjectManager.Role.PRIMARY}
+                    )
+                for emp in secondary_emps:
+                    ProjectManager.objects.update_or_create(
+                        project=proj, employee=emp,
+                        defaults={'role': ProjectManager.Role.SECONDARY}
+                    )
                 if is_new:
                     created += 1
                 else:
@@ -198,7 +206,8 @@ class ProjectTaskViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
 class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class   = AttendanceRecordSerializer
     permission_classes = [IsNotCustomer]
-    http_method_names  = ['get', 'patch', 'head', 'options']  # PUT・DELETE は不要
+    # PUT・DELETE は勤怠レコードに不要。POST は clock-in / upload などのアクション用に許可
+    http_method_names  = ['get', 'post', 'patch', 'head', 'options']
 
     def get_queryset(self):
         user = self.request.user
