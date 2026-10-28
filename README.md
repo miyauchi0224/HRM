@@ -2,6 +2,10 @@
 
 社員の勤怠・給与・目標管理・採用・資産・AI支援などを一元化する社内向け Web アプリケーションです。
 
+> **このリポジトリについて**
+> - 個人で開発した学習用のアプリケーションです。実在の会社・社員のデータは使っていません。
+> - 生成AI（Claude Code）を使って開発しました。
+
 ---
 
 ## 機能一覧
@@ -202,8 +206,9 @@ git clone <repo-url>
 cd HRM
 
 # 2. 環境変数ファイルを作成
-cp backend/.env.example backend/.env
-# backend/.env を編集して必要な値を設定
+cp .env.example .env                  # docker compose 用（DB のパスワード）
+cp backend/.env.example backend/.env  # Django 用
+# 2つの .env を編集して必要な値を設定（.env はコミットしない）
 
 # 3. コンテナを起動
 docker compose up -d
@@ -244,7 +249,11 @@ docker compose restart frontend
 
 ## 環境変数
 
-`backend/.env.example` をコピーして `backend/.env` を作成してください。
+`.env.example` をコピーしてルートに `.env` を、`backend/.env.example` をコピーして `backend/.env` を作成してください。
+
+| 変数（ルートの `.env`） | 説明 |
+|---|---|
+| `POSTGRES_PASSWORD` | DB コンテナのパスワード。backend の `DB_PASSWORD` にも同じ値が使われる |
 
 ### 必須設定
 

@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: hrm
       POSTGRES_USER: hrm_admin
-      POSTGRES_PASSWORD: localpassword
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ルートの .env に POSTGRES_PASSWORD を設定してください}
     ports:
       - "5432:5432"
     volumes:
@@ -26,7 +26,7 @@ services:
       - ./backend/.env
     environment:
       - DB_HOST=db              # docker内ではdbサービス名で接続
-      - DB_PASSWORD=localpassword  # DBコンテナのパスワードに合わせる（.envより優先）
+      - DB_PASSWORD=${POSTGRES_PASSWORD}   # DBコンテナと同じパスワード（ルートの .env で設定）
       - CORS_ALLOWED_ORIGINS=http://localhost:3000
     depends_on:
       db:
