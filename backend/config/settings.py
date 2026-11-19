@@ -52,6 +52,10 @@ LOCAL_APPS = [
     'apps.stress_check',
     'apps.calendar_sync',
     'apps.compliance',
+    'apps.scheduler',
+    'apps.health_checkup',
+    'apps.one_on_one',
+    'apps.pulse_survey',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -165,3 +169,13 @@ MICROSOFT_CLIENT_ID = config('MICROSOFT_CLIENT_ID', default='')
 MICROSOFT_CLIENT_SECRET = config('MICROSOFT_CLIENT_SECRET', default='')
 GOOGLE_CLIENT_ID = config('GOOGLE_CLIENT_ID', default='')
 GOOGLE_CLIENT_SECRET = config('GOOGLE_CLIENT_SECRET', default='')
+
+# ── 運用強化機能（v1.1） ──────────────────────────────────────────
+SCHEDULER_RUN_AT              = config('SCHEDULER_RUN_AT', default='06:00')
+APPROVAL_REMIND_DAYS          = config('APPROVAL_REMIND_DAYS', default=3, cast=int)
+WORK_INTERVAL_MINUTES         = config('WORK_INTERVAL_MINUTES', default=660, cast=int)
+COMPENSATORY_LEAVE_VALID_DAYS = config('COMPENSATORY_LEAVE_VALID_DAYS', default=90, cast=int)
+PULSE_MIN_GROUP_SIZE          = config('PULSE_MIN_GROUP_SIZE', default=5, cast=int)
+FRONTEND_URL                  = config('FRONTEND_URL', default='http://localhost:3000')
+WEBHOOK_TIMEOUT_SECONDS       = config('WEBHOOK_TIMEOUT_SECONDS', default=5, cast=int)
+WEBHOOK_ASYNC                 = config('WEBHOOK_ASYNC', default=True, cast=bool)  # テストでは False にして同期送信

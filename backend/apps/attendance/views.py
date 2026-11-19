@@ -20,6 +20,12 @@ from .serializers import (
 )
 from apps.notifications.models import Notification
 from apps.common.mixins import SoftDeleteViewSetMixin
+from apps.common.utils import get_client_ip
+from apps.approval.delegation import (
+    delegated_applicant_filter, is_delegate_for_applicant, notify_approvers,
+)
+from django.db.models import Q
+from .services import classify_day, check_work_interval
 
 
 OVERTIME_WARNING_MINUTES        = 45 * 60   # 45時間（36協定 一般上限）
@@ -252,14 +258,20 @@ class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         if AttendanceRecord.objects.filter(employee=employee, date=today).exists():
             return Response({'error': '本日はすでに出勤打刻済みです'}, status=status.HTTP_409_CONFLICT)
 
-        now_time = timezone.localtime().time()
+        now      = timezone.localtime()
+        now_time = now.time()
         record = AttendanceRecord.objects.create(
-            employee         = employee,
-            date             = today,
-            clock_in         = now_time,
-            stamped_clock_in = now_time,
-            note             = serializer.validated_data.get('note', ''),
+            employee           = employee,
+            date               = today,
+            clock_in           = now_time,
+            stamped_clock_in   = now_time,
+            note               = serializer.validated_data.get('note', ''),
+            day_type           = classify_day(today),
+            clock_in_ip        = get_client_ip(request),
+            clock_in_latitude  = serializer.validated_data.get('latitude'),
+            clock_in_longitude = serializer.validated_data.get('longitude'),
         )
+        check_work_interval(employee, record, now)
         return Response(AttendanceRecordSerializer(record).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], url_path='clock-out')
@@ -286,6 +298,9 @@ class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         record.stamped_clock_out  = now_time
         record.break_minutes      = serializer.validated_data['break_minutes']
         record.status             = AttendanceRecord.Status.CONFIRMED
+        record.clock_out_ip        = get_client_ip(request)
+        record.clock_out_latitude  = serializer.validated_data.get('latitude')
+        record.clock_out_longitude = serializer.validated_data.get('longitude')
         record.save()
 
         # 残業アラートチェック
@@ -343,6 +358,47 @@ class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
                 message=f'今年の残業累計が{annual_overtime // 60}時間になりました。年間上限（360h）まで残り{(OVERTIME_ANNUAL_ALERT_MINUTES - annual_overtime) // 60}時間です。',
                 related_url='/attendance',
             )
+
+    @action(detail=False, methods=['get'], url_path='holiday-work')
+    def holiday_work(self, request):
+        """
+        GET /api/v1/attendance/holiday-work/?unused=true
+        自分の休日出勤（退勤済み）一覧。unused=true で代休申請に使われていない・期限内のものだけ返す
+        """
+        from datetime import timedelta
+        from django.conf import settings
+        from apps.leave.models import LeaveRequest
+
+        employee = getattr(request.user, 'employee', None)
+        if not employee:
+            return Response({'error': '社員情報が登録されていません'}, status=status.HTTP_404_NOT_FOUND)
+
+        records = AttendanceRecord.objects.filter(
+            employee=employee, clock_out__isnull=False,
+        ).exclude(day_type=AttendanceRecord.DayType.WEEKDAY).order_by('-date')
+
+        active = (LeaveRequest.Status.PENDING, LeaveRequest.Status.APPROVED)
+        used_ids = set(LeaveRequest.objects.filter(
+            employee=employee, holiday_work__in=records, status__in=active,
+        ).values_list('holiday_work_id', flat=True))
+
+        valid_days = settings.COMPENSATORY_LEAVE_VALID_DAYS
+        only_unused = request.query_params.get('unused') == 'true'
+        result = []
+        for r in records:
+            is_used     = r.id in used_ids
+            valid_until = r.date + timedelta(days=valid_days)
+            if only_unused and (is_used or valid_until < date.today()):
+                continue
+            result.append({
+                'id':           str(r.id),
+                'date':         r.date,
+                'day_type':     r.day_type,
+                'work_minutes': r.work_minutes,
+                'is_used':      is_used,
+                'valid_until':  valid_until,
+            })
+        return Response(result)
 
     @action(detail=False, methods=['get'], url_path='summary')
     def summary(self, request):
@@ -774,6 +830,15 @@ class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             record, is_created = AttendanceRecord.objects.update_or_create(
                 employee=employee,
                 date=d,
+                # 新規作成時のみ日の区分を自動判定（既存レコードは上司が変更した値を保つ）
+                create_defaults=dict(
+                    clock_in=ci,
+                    clock_out=co,
+                    break_minutes=bm,
+                    note=str(note) if note else '',
+                    status=AttendanceRecord.Status.CONFIRMED if ci and co else AttendanceRecord.Status.DRAFT,
+                    day_type=classify_day(d),
+                ),
                 defaults=dict(
                     clock_in=ci,
                     clock_out=co,
@@ -943,25 +1008,31 @@ class AttendanceModRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet)
         user = self.request.user
         if user.is_manager:
             return AttendanceModRequest.objects.all()
-        return AttendanceModRequest.objects.filter(applicant__user=user)
+        # 自分の申請 ＋ 代理人として承認できる申請
+        employee = getattr(user, 'employee', None)
+        return AttendanceModRequest.objects.filter(
+            Q(applicant__user=user) | delegated_applicant_filter(employee, 'applicant')
+        ).distinct()
 
     def perform_create(self, serializer):
         serializer.save(applicant=self.request.user.employee)
         employee = self.request.user.employee
-        for manager in employee.managers.all():
-            Notification.send(
-                user=manager.user,
-                type_=Notification.NotificationType.ATTENDANCE_MOD,
-                title='打刻修正申請',
-                message=f'{employee.full_name}さんから打刻修正申請が届きました。',
-                related_url='/attendance/modification',
-            )
+        notify_approvers(
+            list(employee.managers.select_related('user')),
+            type_=Notification.NotificationType.ATTENDANCE_MOD,
+            title='打刻修正申請',
+            message=f'{employee.full_name}さんから打刻修正申請が届きました。',
+            related_url='/attendance/modification',
+        )
 
     @action(detail=True, methods=['patch'], url_path='approve')
     def approve(self, request, pk=None):
         """PATCH /api/v1/attendance/modification-requests/{id}/approve/"""
+        actor = getattr(request.user, 'employee', None)
         if not request.user.is_manager:
-            return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
+            mod = AttendanceModRequest.objects.filter(pk=pk).select_related('applicant').first()
+            if mod is None or not is_delegate_for_applicant(actor, mod.applicant):
+                return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
         mod = self.get_object()
         if mod.status != AttendanceModRequest.Status.PENDING:
             return Response({'error': '申請中のものだけ承認できます'}, status=status.HTTP_400_BAD_REQUEST)
@@ -969,7 +1040,7 @@ class AttendanceModRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet)
         action_type = request.data.get('action', 'approve')
         if action_type == 'approve':
             mod.status      = AttendanceModRequest.Status.APPROVED
-            mod.approver    = request.user.employee
+            mod.approver    = actor
             mod.approved_at = timezone.now()
             mod.save()
             # 勤怠記録に反映

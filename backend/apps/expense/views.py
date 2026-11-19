@@ -16,6 +16,10 @@ from .serializers import AccountItemSerializer, ExpenseRequestSerializer, Expens
 from apps.notifications.models import Notification
 from apps.employees.models import Employee
 from apps.common.mixins import SoftDeleteViewSetMixin
+from apps.approval.delegation import (
+    delegated_applicant_filter, is_delegate_for_applicant, notify_approvers,
+)
+from django.db.models import Q
 
 
 class AccountItemViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
@@ -117,27 +121,33 @@ class ExpenseRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             return ExpenseRequest.objects.select_related(
                 'applicant', 'approver', 'account_item'
             ).all()
-        return ExpenseRequest.objects.filter(applicant__user=user).select_related(
+        # 自分の申請 ＋ 代理人として承認できる申請
+        employee = getattr(user, 'employee', None)
+        return ExpenseRequest.objects.filter(
+            Q(applicant__user=user) | delegated_applicant_filter(employee, 'applicant')
+        ).distinct().select_related(
             'applicant', 'approver', 'account_item'
         )
 
     def perform_create(self, serializer):
         employee = self.request.user.employee
         req = serializer.save(applicant=employee)
-        for manager in employee.managers.all():
-            Notification.send(
-                user=manager.user,
-                type_=Notification.NotificationType.EXPENSE_REQUEST,
-                title='経費申請',
-                message=f'{employee.full_name}さんから経費申請が届きました（¥{req.amount:,}）',
-                related_url='/expense',
-            )
+        notify_approvers(
+            list(employee.managers.select_related('user')),
+            type_=Notification.NotificationType.EXPENSE_REQUEST,
+            title='経費申請',
+            message=f'{employee.full_name}さんから経費申請が届きました（¥{req.amount:,}）',
+            related_url='/expense',
+        )
 
     @action(detail=True, methods=['patch'], url_path='approve')
     def approve(self, request, pk=None):
         """PATCH /api/v1/expense/requests/{id}/approve/"""
+        actor = getattr(request.user, 'employee', None)
         if not request.user.is_supervisor:
-            return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
+            req = ExpenseRequest.objects.filter(pk=pk).select_related('applicant').first()
+            if req is None or not is_delegate_for_applicant(actor, req.applicant):
+                return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
 
         req = self.get_object()
         if req.status != ExpenseRequest.Status.PENDING:
@@ -146,7 +156,7 @@ class ExpenseRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         action_type = request.data.get('action', 'approve')
         if action_type == 'approve':
             req.status      = ExpenseRequest.Status.APPROVED
-            req.approver    = request.user.employee
+            req.approver    = actor
             req.approved_at = timezone.now()
             msg = '経費申請が承認されました'
         else:

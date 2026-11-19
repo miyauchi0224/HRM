@@ -198,6 +198,8 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
     project_records  = AttendanceProjectRecordSerializer(many=True, required=False)
     work_minutes     = serializers.IntegerField(read_only=True)
     overtime_minutes = serializers.IntegerField(read_only=True)
+    holiday_work_minutes = serializers.IntegerField(read_only=True)
+    late_night_minutes   = serializers.IntegerField(read_only=True)
 
     class Meta:
         model  = AttendanceRecord
@@ -205,9 +207,23 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             'id', 'date', 'clock_in', 'clock_out',
             'stamped_clock_in', 'stamped_clock_out',
             'break_minutes', 'status', 'note', 'project_records',
-            'work_minutes', 'overtime_minutes',
+            'work_minutes', 'overtime_minutes', 'holiday_work_minutes', 'late_night_minutes',
+            'day_type', 'rest_interval_minutes',
+            'clock_in_ip', 'clock_out_ip',
+            'clock_in_latitude', 'clock_in_longitude', 'clock_out_latitude', 'clock_out_longitude',
         ]
-        read_only_fields = ['id', 'status']
+        read_only_fields = [
+            'id', 'status', 'rest_interval_minutes', 'clock_in_ip', 'clock_out_ip',
+            'clock_in_latitude', 'clock_in_longitude', 'clock_out_latitude', 'clock_out_longitude',
+        ]
+
+    def validate_day_type(self, value):
+        """日の区分は割増賃金に影響するため、管理職以上のみ変更できる"""
+        request = self.context.get('request')
+        current = getattr(self.instance, 'day_type', None)
+        if value != current and not (request and request.user.is_manager):
+            raise serializers.ValidationError('日の区分は管理職以上のみ変更できます')
+        return value
 
     def validate(self, data):
         """プロジェクト作業合計が実労働時間を超えないことを検証"""
@@ -243,12 +259,25 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
         return instance
 
 
-class ClockInSerializer(serializers.Serializer):
+class LocationSerializer(serializers.Serializer):
+    """打刻時の位置（ブラウザで許可された場合のみ送られる）。7桁以上の小数は6桁に丸める"""
+    latitude  = serializers.FloatField(required=False, allow_null=True, min_value=-90, max_value=90)
+    longitude = serializers.FloatField(required=False, allow_null=True, min_value=-180, max_value=180)
+
+    def validate(self, data):
+        from decimal import Decimal
+        for key in ('latitude', 'longitude'):
+            if data.get(key) is not None:
+                data[key] = Decimal(str(round(data[key], 6)))
+        return data
+
+
+class ClockInSerializer(LocationSerializer):
     """出勤打刻リクエスト用シリアライザー"""
     note = serializers.CharField(required=False, allow_blank=True)
 
 
-class ClockOutSerializer(serializers.Serializer):
+class ClockOutSerializer(LocationSerializer):
     """退勤打刻リクエスト用シリアライザー（休憩時間を受け取る）"""
     break_minutes = serializers.IntegerField(default=60, min_value=0)
 

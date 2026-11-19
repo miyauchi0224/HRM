@@ -109,8 +109,36 @@ class ApprovalStep(SoftDeleteModel):
                                 default=Decision.PENDING)
     comment = models.TextField(blank=True, verbose_name='コメント')
     decided_at = models.DateTimeField(null=True, blank=True)
+    # 実際に判断した人（代理承認のときは代理人。本人が判断したときは approver と同じ）
+    decided_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='approval_steps_decided', verbose_name='判断者')
 
     class Meta:
         verbose_name = '承認ステップ'
         ordering = ['order']
         unique_together = [['request', 'order']]
+
+
+class ApprovalDelegation(SoftDeleteModel):
+    """
+    代理承認の設定
+
+    委任元（delegator）が不在の期間、代理人（delegate）が委任元の権限で承認できる。
+    対象は 休暇・経費・打刻修正・電子稟議。代理の代理は辿らない。
+    """
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    delegator  = models.ForeignKey(Employee, on_delete=models.CASCADE,
+                                   related_name='delegations_given', verbose_name='委任元')
+    delegate   = models.ForeignKey(Employee, on_delete=models.CASCADE,
+                                   related_name='delegations_received', verbose_name='代理人')
+    start_date = models.DateField(verbose_name='開始日')
+    end_date   = models.DateField(verbose_name='終了日')
+    reason     = models.CharField(max_length=200, blank=True, verbose_name='理由')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '代理承認設定'
+        ordering     = ['-start_date']
+
+    def __str__(self):
+        return f'{self.delegator.full_name} → {self.delegate.full_name}（{self.start_date}〜{self.end_date}）'

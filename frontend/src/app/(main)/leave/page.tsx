@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
-import { CalendarOff, Plus, X } from 'lucide-react'
+import { AlertTriangle, CalendarCheck, CalendarOff, CheckCircle2, Plus, X } from 'lucide-react'
 
 // ===== 型定義 =====
 interface LeaveBalance {
@@ -12,6 +12,34 @@ interface LeaveBalance {
   used_days: string
   carried_days: string
   remaining_days: number
+}
+
+interface Obligation {
+  status: 'ok' | 'warning' | 'overdue' | 'not_applicable'
+  grant_date?: string
+  deadline?: string
+  granted_days?: number
+  taken_days?: number
+  required_days?: number
+  remaining_required?: number
+  days_until_deadline?: number
+}
+
+interface LeaveGrant {
+  id: string
+  grant_date: string
+  days: string
+  expires_on: string
+  source: 'auto' | 'manual'
+  note: string
+}
+
+interface HolidayWork {
+  id: string
+  date: string
+  day_type: string
+  work_minutes: number
+  valid_until: string
 }
 
 interface LeaveRequest {
@@ -24,11 +52,12 @@ interface LeaveRequest {
   status: 'pending' | 'approved' | 'rejected' | 'cancelled'
   approved_at: string | null
   created_at: string
+  holiday_work_date: string | null
 }
 
 const LEAVE_TYPE_LABEL: Record<string, string> = {
   annual: '有給休暇', special: '特別休暇', sick: '病気休暇',
-  maternity: '産休', childcare: '育休', bereavement: '忌引き',
+  maternity: '産休', childcare: '育休', bereavement: '忌引き', compensatory: '代休',
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -54,6 +83,16 @@ export default function LeavePage() {
   const { data: requests = [], isLoading } = useQuery<LeaveRequest[]>({
     queryKey: ['leave-requests'],
     queryFn: () => api.get('/api/v1/leave/requests/').then((r) => r.data.results ?? r.data),
+  })
+
+  // 年5日取得義務の状況・付与履歴
+  const { data: obligation } = useQuery<Obligation>({
+    queryKey: ['leave-obligation'],
+    queryFn: () => api.get('/api/v1/leave/grants/obligation/').then((r) => r.data),
+  })
+  const { data: grants = [] } = useQuery<LeaveGrant[]>({
+    queryKey: ['leave-grants'],
+    queryFn: () => api.get('/api/v1/leave/grants/').then((r) => r.data.results ?? r.data),
   })
 
   const cancelMutation = useMutation({
@@ -94,6 +133,9 @@ export default function LeavePage() {
         </div>
       )}
 
+      {/* 年5日取得義務 */}
+      {obligation && obligation.status !== 'not_applicable' && <ObligationCard ob={obligation} />}
+
       {/* 申請一覧 */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
@@ -126,6 +168,9 @@ export default function LeavePage() {
                   <tr key={req.id} className="border-b border-gray-50 hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium text-gray-700">
                       {LEAVE_TYPE_LABEL[req.leave_type] ?? req.leave_type}
+                      {req.holiday_work_date && (
+                        <span className="block text-xs font-normal text-gray-400">{req.holiday_work_date} 出勤分</span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-gray-600">
                       {req.start_date} 〜 {req.end_date}
@@ -159,6 +204,37 @@ export default function LeavePage() {
         )}
       </div>
 
+      {/* 付与履歴 */}
+      {grants.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-6">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="font-semibold text-gray-700">有給の付与履歴</h2>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-gray-400 text-xs border-b border-gray-100">
+                <th className="text-left px-5 py-3 font-medium">付与日</th>
+                <th className="text-left px-5 py-3 font-medium">日数</th>
+                <th className="text-left px-5 py-3 font-medium">有効期限</th>
+                <th className="text-left px-5 py-3 font-medium">区分</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grants.map((g) => (
+                <tr key={g.id} className="border-b border-gray-50">
+                  <td className="px-5 py-3 text-gray-700">{g.grant_date}</td>
+                  <td className="px-5 py-3 text-gray-700">{g.days}日</td>
+                  <td className="px-5 py-3 text-gray-500">{g.expires_on}</td>
+                  <td className="px-5 py-3 text-gray-500">
+                    {g.source === 'auto' ? '自動付与' : `手動付与${g.note ? `（${g.note}）` : ''}`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* 新規申請モーダル */}
       {showNew && (
         <NewLeaveModal
@@ -167,6 +243,7 @@ export default function LeavePage() {
             setShowNew(false)
             qc.invalidateQueries({ queryKey: ['leave-requests'] })
             qc.invalidateQueries({ queryKey: ['leave-balances'] })
+            qc.invalidateQueries({ queryKey: ['holiday-work'] })
           }}
         />
       )}
@@ -183,6 +260,15 @@ function NewLeaveModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   const [days,      setDays]      = useState('1')
   const [reason,    setReason]    = useState('')
   const [saving,    setSaving]    = useState(false)
+  const [holidayWork, setHolidayWork] = useState('')
+  const isCompensatory = leaveType === 'compensatory'
+
+  // 代休の元にできる休日出勤（未使用・期限内）
+  const { data: holidayWorks = [] } = useQuery<HolidayWork[]>({
+    queryKey: ['holiday-work'],
+    queryFn: () => api.get('/api/v1/attendance/holiday-work/?unused=true').then((r) => r.data),
+    enabled: isCompensatory,
+  })
 
   // 日付変更時に日数を自動計算
   const calcDays = (start: string, end: string) => {
@@ -203,11 +289,13 @@ function NewLeaveModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
         end_date: endDate,
         days,
         reason,
+        ...(isCompensatory ? { holiday_work: holidayWork } : {}),
       })
       onSaved()
     } catch (e: any) {
       const data = e.response?.data
-      const msg = data?.error ?? data?.days?.[0] ?? data?.non_field_errors?.[0] ?? '申請に失敗しました'
+      const msg = data?.error ?? data?.days?.[0] ?? data?.holiday_work?.[0] ?? data?.start_date?.[0]
+        ?? data?.non_field_errors?.[0] ?? '申請に失敗しました'
       alert(msg)
     } finally {
       setSaving(false)
@@ -236,6 +324,30 @@ function NewLeaveModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
               ))}
             </select>
           </div>
+
+          {/* 代休の元になる休日出勤 */}
+          {isCompensatory && (
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">休日出勤日</label>
+              {holidayWorks.length === 0 ? (
+                <p className="text-sm text-gray-400">代休を取得できる休日出勤がありません</p>
+              ) : (
+                <select
+                  value={holidayWork}
+                  onChange={(e) => setHolidayWork(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                >
+                  <option value="">選択してください</option>
+                  {holidayWorks.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.date}（{h.day_type === 'legal_holiday' ? '法定休日' : '所定休日'}・
+                      {Math.floor(h.work_minutes / 60)}h{h.work_minutes % 60}m）〜{h.valid_until}まで
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
 
           {/* 期間 */}
           <div className="grid grid-cols-2 gap-3">
@@ -297,13 +409,55 @@ function NewLeaveModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           </button>
           <button
             onClick={save}
-            disabled={saving || !startDate || !endDate || !days}
+            disabled={saving || !startDate || !endDate || !days || (isCompensatory && !holidayWork)}
             className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg text-sm font-medium transition-colors"
           >
             {saving ? '申請中...' : '申請する'}
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ===== 年5日取得義務カード =====
+function ObligationCard({ ob }: { ob: Obligation }) {
+  const done    = (ob.remaining_required ?? 0) === 0
+  const style   = done
+    ? 'border-green-200 bg-green-50'
+    : ob.status === 'overdue' ? 'border-red-200 bg-red-50'
+    : ob.status === 'warning' ? 'border-amber-200 bg-amber-50'
+    : 'border-gray-200 bg-white'
+  const percent = Math.min(100, ((ob.taken_days ?? 0) / (ob.required_days ?? 5)) * 100)
+
+  return (
+    <div className={`rounded-xl border p-5 mb-6 ${style}`}>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="font-semibold text-gray-700 flex items-center gap-2">
+            {done
+              ? <CheckCircle2 size={16} className="text-green-600" />
+              : ob.status === 'ok'
+              ? <CalendarCheck size={16} className="text-gray-500" />
+              : <AlertTriangle size={16} className={ob.status === 'overdue' ? 'text-red-600' : 'text-amber-600'} />}
+            有給の年5日取得義務
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">
+            対象期間 {ob.grant_date} 〜 {ob.deadline}（{ob.granted_days}日付与分）
+          </p>
+        </div>
+        <p className="text-sm text-gray-700">
+          {done
+            ? '5日の取得が完了しています'
+            : ob.status === 'overdue'
+            ? `期限を過ぎています。あと ${ob.remaining_required} 日の取得が必要です`
+            : `期限まで ${ob.days_until_deadline} 日。あと ${ob.remaining_required} 日の取得が必要です`}
+        </p>
+      </div>
+      <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className={`h-full ${done ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${percent}%` }} />
+      </div>
+      <p className="text-xs text-gray-500 mt-1">取得済み {ob.taken_days} / {ob.required_days} 日</p>
     </div>
   )
 }

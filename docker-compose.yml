@@ -32,6 +32,21 @@ services:
       db:
         condition: service_healthy
 
+  # 定期ジョブ（有給付与・各種リマインド等）を毎日 SCHEDULER_RUN_AT に実行する常駐プロセス
+  scheduler:
+    build: ./backend
+    command: python manage.py run_scheduler
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=db
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+
   frontend:
     build: ./frontend
     command: npm run dev

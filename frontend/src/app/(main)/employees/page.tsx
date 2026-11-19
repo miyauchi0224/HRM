@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import EmploymentHistorySection from './EmploymentHistorySection'
 import { Users, Plus, Search, X, Pencil, Check, Trash2, PhoneCall, AlertCircle, Camera } from 'lucide-react'
 
 interface EmergencyContact {
@@ -524,6 +525,9 @@ function EmployeeDetail({ emp }: { emp: Employee }) {
 
         {/* 勤務先・通勤経路 */}
         <WorkplaceSection emp={emp} canEdit={canEdit} onSaved={() => qc.invalidateQueries({ queryKey: ['employee', emp.id] })} />
+
+        {/* 異動・昇格履歴 */}
+        <EmploymentHistorySection employeeId={emp.id} />
       </div>
     </div>
   )

@@ -43,3 +43,22 @@ class IsAccounting(IsAuthenticated):
 
     def has_permission(self, request, view):
         return super().has_permission(request, view) and request.user.is_accounting
+
+
+class IsLabor(IsAuthenticated):
+    """
+    労務以上（labor / hr / admin）のみ許可。
+    健康診断結果など要配慮個人情報を扱う操作に使用する。
+    """
+    message = '労務担当以上の権限が必要です。'
+
+    def has_permission(self, request, view):
+        return super().has_permission(request, view) and request.user.is_labor
+
+
+class IsAdmin(IsAuthenticated):
+    """システム管理者のみ許可。"""
+    message = 'システム管理者の権限が必要です。'
+
+    def has_permission(self, request, view):
+        return super().has_permission(request, view) and request.user.is_admin

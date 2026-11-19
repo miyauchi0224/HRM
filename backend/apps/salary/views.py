@@ -27,6 +27,8 @@ PENSION_RATE              = Decimal('0.0915')   # 厚生年金 9.15%
 EMPLOYMENT_INSURANCE_RATE = Decimal('0.006')    # 雇用保険 0.6%
 NURSING_INSURANCE_RATE    = Decimal('0.0091')   # 介護保険 0.91%（40歳以上）
 OVERTIME_RATE             = Decimal('1.25')     # 残業割増率
+HOLIDAY_WORK_RATE         = Decimal('1.35')     # 法定休日労働の割増率
+LATE_NIGHT_PREMIUM        = Decimal('0.25')     # 深夜労働の割増分（時間外・休日の割増に上乗せ）
 
 
 class SalaryGradeViewSet(viewsets.ModelViewSet):
@@ -679,6 +681,14 @@ def _calculate_payslip(employee: Employee, year: int, month: int) -> Payslip:
     total_overtime_min = sum(r.overtime_minutes for r in records)
     hourly_rate        = Decimal(str(base_salary)) / 160
     overtime_pay       = int(hourly_rate * Decimal(str(total_overtime_min / 60)) * OVERTIME_RATE)
+
+    # ── 時間外手当（深夜・休日）: 法定休日労働 ×1.35 ＋ 深夜時間 ×0.25（手当マスタの値に加算） ──
+    holiday_work_min = sum(r.holiday_work_minutes for r in records)
+    late_night_min   = sum(r.late_night_minutes for r in records)
+    allowance_map['extra_overtime'] += int(
+        hourly_rate * Decimal(str(holiday_work_min / 60)) * HOLIDAY_WORK_RATE
+        + hourly_rate * Decimal(str(late_night_min / 60)) * LATE_NIGHT_PREMIUM
+    )
 
     # ── 勤怠日数 ──
     work_days = records.filter(clock_in__isnull=False, clock_out__isnull=False).count()

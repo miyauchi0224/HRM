@@ -9,6 +9,7 @@ import {
   CheckSquare, Newspaper, Calculator, FileText, MessageSquare,
   UserPlus, Package, BarChart2, Star, BookOpen, Bot,
   FolderOpen, ClipboardList, HeartPulse, GanttChartSquare, ShieldAlert,
+  MessagesSquare, BarChartHorizontal, Stethoscope, UserCheck, CalendarCheck, Cog,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -21,6 +22,7 @@ const SUPERVISOR_ROLES = ['supervisor', 'manager', 'hr', 'accounting', 'admin']
 const ACCOUNTING_ROLES = ['accounting', 'hr', 'admin']
 const HR_ROLES         = ['hr', 'admin']
 const MANAGER_ROLES    = ['manager', 'hr', 'accounting', 'admin']
+const LABOR_ROLES      = ['labor', 'hr', 'admin']
 
 export default function Sidebar() {
   const pathname     = usePathname()
@@ -31,6 +33,7 @@ export default function Sidebar() {
   const isManager    = MANAGER_ROLES.includes(role)
   const isAccounting = ACCOUNTING_ROLES.includes(role)
   const isHR         = HR_ROLES.includes(role)
+  const isLabor      = LABOR_ROLES.includes(role)
   const isAdmin      = role === 'admin'
 
   const active = (href: string) =>
@@ -59,11 +62,14 @@ export default function Sidebar() {
         <SectionLabel>社員の機能・基本機能</SectionLabel>
         <NavLink href="/"              label="ダッシュボード"    icon={Home}          active={active('/')} />
         <NavLink href="/attendance"    label="出退勤管理"        icon={Clock}         active={active('/attendance')} />
-        <NavLink href="/leave"         label="有給・休暇"        icon={Calendar}      active={active('/leave')} />
+        <NavLink href="/leave"         label="有給・休暇"        icon={Calendar}      active={active('/leave') && !active('/leave/obligation')} />
         <NavLink href="/salary"        label="給与明細"          icon={DollarSign}    active={active('/salary')} />
         <NavLink href="/expense"       label="経費申請"          icon={Receipt}       active={active('/expense')} />
-        <NavLink href="/approval"      label="電子稟議"          icon={FileText}      active={active('/approval')} />
+        <NavLink href="/approval"      label="電子稟議"          icon={FileText}      active={active('/approval') && !active('/approval/delegation')} />
+        <NavLink href="/approval/delegation" label="代理承認設定" icon={UserCheck}  active={active('/approval/delegation')} />
         <NavLink href="/stress-check"  label="ストレスチェック"  icon={HeartPulse}    active={active('/stress-check')} />
+        <NavLink href="/health-checkup" label="健康診断"         icon={Stethoscope}   active={active('/health-checkup')} />
+        <NavLink href="/pulse"         label="パルスサーベイ"    icon={BarChartHorizontal} active={active('/pulse')} />
         <NavLink href="/notifications" label="通知"              icon={Bell}          active={active('/notifications')} />
         <NavLink href="/chat"          label="チャット"          icon={MessageSquare} active={active('/chat')} />
 
@@ -71,6 +77,7 @@ export default function Sidebar() {
         <SectionLabel>業務・スキル</SectionLabel>
         <NavLink href="/todo"       label="TODO／日報"        icon={CheckSquare} active={active('/todo')} />
         <NavLink href="/mbo"        label="目標管理/月報"     icon={Target}      active={active('/mbo')} />
+        <NavLink href="/one-on-one" label="1on1"              icon={MessagesSquare} active={active('/one-on-one')} />
         <NavLink href="/evaluation" label="360度評価"         icon={Star}        active={active('/evaluation')} />
         <NavLink href="/skills"     label="取得資格登録"      icon={Award}       active={active('/skills')} />
         <NavLink href="/learning"   label="研修・e-Learning"  icon={BookOpen}    active={active('/learning')} />
@@ -93,11 +100,16 @@ export default function Sidebar() {
         )}
 
         {/* ━━━ 労務部 ━━━ */}
-        {isHR && (
+        {(isLabor || isSupervisor) && (
           <>
             <SectionLabel>管理部門（労務部）</SectionLabel>
-            <NavLink href="/attendance"   label="36協定状況"       icon={ShieldAlert}  active={active('/attendance')} />
-            <NavLink href="/compliance"   label="コンプライアンス" icon={CheckSquare}  active={active('/compliance')} />
+            {isHR && (
+              <NavLink href="/attendance" label="36協定状況"       icon={ShieldAlert}  active={active('/attendance')} />
+            )}
+            <NavLink href="/leave/obligation" label="有給 年5日取得状況" icon={CalendarCheck} active={active('/leave/obligation')} />
+            {isHR && (
+              <NavLink href="/compliance" label="コンプライアンス" icon={CheckSquare}  active={active('/compliance')} />
+            )}
           </>
         )}
 
@@ -127,9 +139,14 @@ export default function Sidebar() {
         )}
 
         {/* ━━━ システム管理 ━━━ */}
-        {isAdmin && (
+        {isHR && (
           <>
             <SectionLabel>システム管理機能</SectionLabel>
+            <NavLink href="/system" label="通知連携・定期ジョブ" icon={Cog} active={active('/system')} />
+          </>
+        )}
+        {isAdmin && (
+          <>
             <a
               href={ADMIN_URL}
               target="_blank"
@@ -211,6 +228,7 @@ function roleLabel(role?: string) {
     supervisor: '上司',
     manager:    '管理職',
     hr:         '人事',
+    labor:      '労務',
     accounting: '経理',
     admin:      'システム管理者',
     customer:   '顧客',

@@ -45,6 +45,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         max_length=20, choices=AIProvider.choices, default=AIProvider.ANTHROPIC,
         verbose_name='使用するAIプロバイダー',
     )
+    class WebhookProvider(models.TextChoices):
+        SLACK = 'slack', 'Slack'
+        TEAMS = 'teams', 'Microsoft Teams'
+
+    # 本人宛て通知の転送先（Slack / Teams の Incoming Webhook）
+    personal_webhook_provider = models.CharField(
+        max_length=10, choices=WebhookProvider.choices, blank=True, verbose_name='個人通知の転送先',
+    )
+    personal_webhook_url = models.CharField(max_length=500, blank=True, verbose_name='個人通知の Webhook URL')
     is_active          = models.BooleanField(default=True)
     is_staff           = models.BooleanField(default=False)
     created_at         = models.DateTimeField(auto_now_add=True)
@@ -109,6 +118,14 @@ class User(AbstractBaseUser, PermissionsMixin):
         ※ 人事も給与関連を扱うため含む
         """
         return any(r in self.roles for r in (self.Role.ACCOUNTING, self.Role.HR, self.Role.ADMIN))
+
+    @property
+    def is_labor(self):
+        """
+        労務以上（健康診断・年5日取得状況など労務管理データを扱える）
+        labor / hr / admin が対象
+        """
+        return any(r in self.roles for r in (self.Role.LABOR, self.Role.HR, self.Role.ADMIN))
 
     @property
     def is_admin(self):

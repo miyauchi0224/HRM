@@ -1,7 +1,8 @@
 # 人事管理システム（HRM）詳細設計書
 
 **作成日**: 2026-04-09  
-**バージョン**: 1.0
+**更新日**: 2026-11-19（v1.1: [7章](#7-運用強化機能の詳細設計v11)を追加）  
+**バージョン**: 1.1
 
 ---
 
@@ -13,6 +14,7 @@
 4. [認証フロー](#4-認証フロー)
 5. [ファイル操作フロー](#5-ファイル操作フロー)
 6. [ビジネスロジック詳細](#6-ビジネスロジック詳細)
+7. [運用強化機能の詳細設計（v1.1）](#7-運用強化機能の詳細設計v11)
 
 ---
 
@@ -1019,7 +1021,7 @@ net_salary = gross_salary - health_insurance - pension
 
 - 繰越は最大**20日**まで
 - 付与日 = 入社日から6ヶ月後、以降1年ごと
-- Djangoのcelery-beatで毎日0時にバッチ処理
+- 定期実行基盤（`scheduler` アプリ）のジョブ `leave.grant_annual_leave` で毎朝処理（v1.1 で celery-beat 案から変更。[7.1](#71-定期実行基盤scheduler) 参照）
 
 ### 6.5 MBOウェイト合計チェック
 
@@ -1052,3 +1054,367 @@ net_salary = gross_salary - health_insurance - pension
 ```
 
 **使用モデル**: `anthropic.claude-sonnet-4-5-20250929-v1:0`
+
+---
+
+## 7. 運用強化機能の詳細設計（v1.1）
+
+### 7.0 共通方針
+
+- 新規モデルは既存と同じく `SoftDeleteModel` を継承し、UUID 主キーとする（実行ログの `JobRun` のみ `AuditLog` と同様にログ扱いで継承しない）。
+- 通知は既存の `Notification.send()` を使う。v1.1 で通知種別を追加する：
+  `leave_obligation`（年5日取得義務）/ `approval_reminder`（承認リマインド）/ `work_interval`（勤務間インターバル）/ `health_checkup`（健康診断）/ `one_on_one`（1on1）/ `pulse_survey`（パルスサーベイ）
+- 追加の環境変数（すべて任意。括弧内は既定値）：
+
+| 変数 | 説明 |
+|---|---|
+| `SCHEDULER_RUN_AT` (`06:00`) | 定期ジョブの実行時刻（Asia/Tokyo） |
+| `APPROVAL_REMIND_DAYS` (`3`) | 承認待ちを再通知する間隔（日） |
+| `WORK_INTERVAL_MINUTES` (`660`) | 勤務間インターバルの基準（分）。11時間 |
+| `COMPENSATORY_LEAVE_VALID_DAYS` (`90`) | 休日出勤日から代休を取得できる期限（日） |
+| `PULSE_MIN_GROUP_SIZE` (`5`) | パルスサーベイで集計を表示する最小人数 |
+| `FRONTEND_URL` (`http://localhost:3000`) | Webhook のメッセージに載せる画面 URL の起点 |
+| `WEBHOOK_TIMEOUT_SECONDS` (`5`) | Webhook 送信のタイムアウト |
+
+### 7.1 定期実行基盤（scheduler）
+
+**構成**
+```
+apps/scheduler/
+  registry.py   … @register_job(name, description, order) でジョブを登録
+  runner.py     … run_due_jobs(run_date, only=None, force=False)
+  models.py     … JobRun（実行履歴）
+  management/commands/run_jobs.py       … 1回だけ実行（cron / EventBridge から起動）
+  management/commands/run_scheduler.py  … 常駐して毎日 SCHEDULER_RUN_AT に run_jobs 相当を実行
+各アプリの jobs.py … ジョブ本体。scheduler の AppConfig.ready() で autodiscover する
+```
+
+**JobRun**
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | UUID | PK |
+| job_name | VARCHAR(100) | 例 `leave.grant_annual_leave` |
+| run_date | DATE | 対象日（ジョブ内の「今日」） |
+| status | VARCHAR(20) | `running` / `success` / `failed` |
+| result | JSONB | ジョブの戻り値（件数など） |
+| error | TEXT | 失敗時のスタックトレース |
+| started_at / finished_at | TIMESTAMP | |
+
+**実行ルール**
+- 同じ `job_name` × `run_date` で `success` の記録があればスキップする（`--force` で再実行）。
+- 1つのジョブが失敗しても後続のジョブは実行する。失敗はシステム管理者に `system` 通知する。
+- ジョブは `order` 昇順で実行する（年度繰越 → 有給付与 の順序を保証するため）。
+
+**API**
+
+| メソッド | パス | 権限 | 説明 |
+|---|---|---|---|
+| GET | `/api/v1/scheduler/jobs/` | 人事以上 | 登録ジョブ一覧と最終実行結果 |
+| GET | `/api/v1/scheduler/runs/?job_name=` | 人事以上 | 実行履歴（新しい順） |
+| POST | `/api/v1/scheduler/jobs/{job_name}/run/` | 管理者 | 手動実行（`{"date": "YYYY-MM-DD", "force": true}` 任意） |
+
+### 7.2 有給の自動付与・年5日取得義務・代休
+
+**LeaveGrant（有給付与履歴）**
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| employee_id | FK | |
+| grant_date | DATE | 付与日（employee と複合ユニーク） |
+| days | DECIMAL(4,1) | 付与日数 |
+| expires_on | DATE | 時効（付与日から2年後の前日） |
+| source | VARCHAR(10) | `auto`（ジョブ）/ `manual`（人事が登録） |
+| note | TEXT | |
+
+**自動付与（`leave.grant_annual_leave`）**
+- 対象：雇用形態が正社員・契約社員で、入社日があり、退職していない社員。
+  パート（比例付与）と派遣社員は対象外とし、必要に応じて人事が手動付与する。
+- 付与日：入社日の6ヶ月後、以降1年ごと。付与日数は [6.4](#64-有給付与ロジック) の表に従う。
+- 出勤率8割の要件は判定しない（勤怠データが揃っていない期間があるため）。対象外の社員は人事が付与履歴を削除する。
+- 実行日時点の「直近の付与日」に付与履歴がなければ付与する（ジョブが数日止まっても取りこぼさない）。
+- 付与時は付与日の属する年度の `LeaveBalance.granted_days` に加算し、本人に通知する。
+
+**年度繰越（`leave.rollover_fiscal_year`）**
+- 前年度の残高がある社員について、今年度の残高を作成（または取得）する。
+- `rollover_done = false` の場合のみ：`carried_days = min(前年度残日数, 前年度付与日数, 20)` を設定し、`rollover_done = true` にする。
+  前年度付与分のみが繰り越せる（2年の時効）ため、前年度付与日数を上限とする。
+- 既に `carried_days` が手入力されている（0 以外）場合は上書きせず、処理済みにだけする。
+
+**年5日取得義務（`leave.check_five_day_obligation`）**
+- 対象：付与日数が10日以上の付与履歴のうち、基準期間（付与日〜1年後の前日）の途中にあるもの。
+- 取得日数：基準期間内に開始する承認済みの有給（`annual`）申請の日数合計（半日 0.5 日を含む）。
+- 取得日数 < 5 日の場合、期限までの残り日数が 90 / 60 / 30 / 14 / 7 日の日に通知する。
+  - 本人と上司：全タイミング
+  - 人事・労務：30日前と7日前
+
+**代休**
+- `LeaveRequest.leave_type` に `compensatory`（代休）を追加し、`holiday_work_id`（勤怠記録への FK）を必須にする。
+- バリデーション：本人の勤怠記録であること／`day_type` が所定休日または法定休日であること／退勤済みであること／
+  同じ休日出勤に紐づく有効な（申請中・承認済の）代休申請がないこと／取得日が休日出勤日の翌日以降かつ `COMPENSATORY_LEAVE_VALID_DAYS` 日以内であること。
+- 代休は有給残高を減らさない。
+
+**API**
+
+| メソッド | パス | 権限 | 説明 |
+|---|---|---|---|
+| GET | `/api/v1/leave/grants/` | 本人（上司以上は `?employee_id=`） | 付与履歴 |
+| POST | `/api/v1/leave/grants/` | 人事 | 手動付与（残高にも加算） |
+| GET | `/api/v1/leave/grants/obligation/` | 本人 | 自分の年5日の状況 |
+| GET | `/api/v1/leave/grants/obligation-summary/` | 管理職・労務・人事 | 全社員の年5日の状況 |
+| GET | `/api/v1/attendance/holiday-work/?unused=true` | 本人 | 代休の元にできる休日出勤一覧 |
+
+年5日の状況レスポンス例：
+```json
+{
+  "grant_date": "2026-04-01", "deadline": "2027-03-31", "granted_days": 11.0,
+  "taken_days": 2.0, "required_days": 5, "remaining_required": 3.0,
+  "days_until_deadline": 132, "status": "ok"
+}
+```
+`status`：5日取得済み → `ok`、未達で期限まで90日超 → `ok`、未達で90日以内 → `warning`、期限超過で未達 → `overdue`。
+
+### 7.3 承認リマインド・代理承認
+
+**ApprovalDelegation（代理承認）**
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| delegator_id | FK Employee | 委任元（不在になる承認者） |
+| delegate_id | FK Employee | 代理人 |
+| start_date / end_date | DATE | 有効期間（両端を含む） |
+| reason | VARCHAR(200) | 例：夏季休暇 |
+
+- 委任元と代理人は別人であること、`end_date >= start_date` であること。代理の代理（多段委任）は辿らない。
+- 登録・削除は委任元本人、または人事。
+
+**対象となる承認**
+
+| 申請 | 承認者 | 代理人が承認できる条件 |
+|---|---|---|
+| 休暇申請・経費申請・打刻修正申請 | 申請者の上司（`Employee.managers`） | 委任元が申請者の上司である |
+| 電子稟議 | 現在のステップの `ApprovalStep.approver` | 委任元がそのステップの承認者である |
+
+- 承認依頼の通知は、承認者に加えて有効な代理人にも「【代理】」を付けて送る。
+- 稟議では実際に判断した人を `ApprovalStep.decided_by` に記録する（休暇・経費・打刻修正は従来どおり `approver` に実際の承認者を記録）。
+- 代理人が一般社員の場合でも、代理期間中は委任元の部下の申請を一覧・承認できる。
+
+**リマインド（`approval.remind_pending`）**
+- 経過日数 = 今日 − 起算日。起算日は、休暇・経費・打刻修正は申請日、稟議は「1つ前のステップの判断日（なければ申請日）」。
+- 経過日数が `APPROVAL_REMIND_DAYS` 以上かつその倍数の日に、承認者（＋代理人）へ `approval_reminder` 通知を送る。
+
+**API**
+
+| メソッド | パス | 権限 | 説明 |
+|---|---|---|---|
+| GET | `/api/v1/approval/delegations/` | 本人（自分が委任元・代理人のもの）／人事は全件 | 代理設定一覧 |
+| POST | `/api/v1/approval/delegations/` | 本人（人事は `delegator` 指定可） | 登録 |
+| DELETE | `/api/v1/approval/delegations/{id}/` | 委任元・人事 | 削除（論理削除） |
+
+### 7.4 休日出勤・勤務間インターバル・打刻時の位置情報
+
+**AttendanceRecord 追加カラム**
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| day_type | VARCHAR(20) | `weekday`（平日）/ `non_legal_holiday`（所定休日）/ `legal_holiday`（法定休日）。既定 `weekday` |
+| rest_interval_minutes | INT NULL | 前回の退勤から今回の出勤までの分数 |
+| clock_in_ip / clock_out_ip | INET NULL | 打刻時の IP（`X-Forwarded-For` の先頭、なければ `REMOTE_ADDR`） |
+| clock_in_latitude / clock_in_longitude / clock_out_latitude / clock_out_longitude | DECIMAL(9,6) NULL | 打刻時の位置（ブラウザで許可された場合のみ） |
+
+**日の区分の判定**（出勤打刻時・一括アップロード時に自動設定。上司以上は PATCH で変更可）
+- 日曜日 → 法定休日
+- 土曜日・国民の祝日（`holidays` ライブラリ）・12/31〜1/3 → 所定休日
+- それ以外 → 平日
+
+**時間計算（6.1 を v1.1 で具体化）**
+
+| 区分 | 時間外（`overtime_minutes`） | 休日労働（`holiday_work_minutes`） |
+|---|---|---|
+| 平日 | 実労働 − 480分（0未満は0） | 0 |
+| 所定休日 | 実労働の全時間 | 0 |
+| 法定休日 | 0 | 実労働の全時間 |
+
+- 深夜時間（`late_night_minutes`）：出勤〜退勤のうち 0:00〜5:00 と 22:00〜24:00 に重なる分数（休憩控除は行わない概算）。日をまたぐ勤務は扱わない（退勤は当日中の前提）。
+- 36協定の集計は `overtime_minutes` を使うため、法定休日労働は月45h・年360hの時間外に含まれない（法令どおり）。
+- 給与計算：`時間外手当（深夜・休日）` = 手当マスタの値 ＋ 時給×休日労働時間×1.35 ＋ 時給×深夜時間×0.25（時給 = 基本給 / 160、既存ロジックと同じ）。
+
+**勤務間インターバル**
+- 出勤打刻時、直前の勤怠記録（退勤済み）の退勤日時から現在までの分数を `rest_interval_minutes` に保存する。
+- `WORK_INTERVAL_MINUTES` 未満なら本人と上司に `work_interval` 通知を送る（打刻自体は止めない）。
+
+**打刻 API の追加パラメータ**（`clock-in` / `clock-out` 共通、すべて任意）
+```json
+{ "latitude": 35.681236, "longitude": 139.767125 }
+```
+
+### 7.5 異動・昇格履歴
+
+**EmploymentHistory**
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| employee_id | FK | |
+| effective_date | DATE | 発令日 |
+| change_type | VARCHAR(30) | `transfer`（異動）/ `promotion`（昇格）/ `demotion`（降格）/ `position_change`（役職変更）/ `employment_type_change`（雇用形態変更）/ `other` |
+| department_before / department_after | VARCHAR(100) | |
+| position_before / position_after | VARCHAR(100) | |
+| grade_before / grade_after | INT NULL | |
+| employment_type_before / employment_type_after | VARCHAR(20) | |
+| note | TEXT | 発令内容・理由 |
+| is_applied | BOOL | 社員情報へ反映済みか |
+| applied_at | TIMESTAMP NULL | |
+| created_by | FK User NULL | |
+
+**記録のされ方**
+1. **自動記録**：社員情報の部署・役職・等級・雇用形態が変更・保存されたとき、変更前後を `effective_date = 今日`・`is_applied = true` で記録する。
+2. **発令登録**：人事が変更後の値と発令日を登録する。発令日が今日以前ならすぐ反映、未来日なら `is_applied = false` で予約し、`employees.apply_scheduled_changes` が発令日に反映する。反映時は 1 の自動記録を重ねて作らない。
+
+- `change_type` の自動判定の優先順：等級↑ → `promotion`、等級↓ → `demotion`、部署変更 → `transfer`、役職変更 → `position_change`、雇用形態変更 → `employment_type_change`。
+
+**過去時点の再現（`as_of`）**
+- 指定日以前に反映された最後の履歴の「変更後」の値を使う。
+- 指定日以前の履歴がなく、指定日より後の履歴がある場合は、最初の履歴の「変更前」の値を使う。
+- 履歴がない場合は現在の値を使う。入社日が指定日より後の社員と、指定日以前に退職した社員は除外する。
+
+**API**
+
+| メソッド | パス | 権限 | 説明 |
+|---|---|---|---|
+| GET | `/api/v1/employees/{id}/history/` | 本人・管理職以上 | 履歴一覧（発令日の新しい順） |
+| POST | `/api/v1/employees/{id}/history/` | 人事 | 発令登録 |
+| GET | `/api/v1/employees/org-chart/?as_of=YYYY-MM-DD` | 管理職以上 | 指定日時点の組織図 |
+
+### 7.6 健康診断の受診管理
+
+**HealthCheckup**
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| employee_id | FK | |
+| fiscal_year | INT | 年度（4月始まり） |
+| checkup_type | VARCHAR(20) | `regular`（定期）/ `hiring`（雇入時）/ `special`（特殊）/ `other` |
+| scheduled_date | DATE NULL | 受診予定日 |
+| checkup_date | DATE NULL | 受診日（NULL = 未受診） |
+| institution | VARCHAR(200) | 医療機関 |
+| result | VARCHAR(20) | `''`（未判定）/ `a_normal`（異常なし）/ `b_minor`（軽度異常）/ `c_observation`（要経過観察）/ `d_reexam`（要再検査）/ `e_treatment`（要治療） |
+| followup_due_date | DATE NULL | 再検査・受診の期限 |
+| followup_completed_date | DATE NULL | 再検査・受診の完了日 |
+| note | TEXT | |
+
+- 判定が `d_reexam` / `e_treatment` のとき「要フォロー」とする（`followup_required`）。
+- 権限：本人は自分の記録を閲覧のみ。登録・編集・全件閲覧は労務・人事・管理者（`User.is_labor` を追加）。上司には開示しない。
+
+**集計（`GET /api/v1/health-checkups/summary/?fiscal_year=`）**
+```json
+{
+  "fiscal_year": 2026, "target_count": 30, "checked_count": 24, "checkup_rate": 80.0,
+  "followup_required_count": 5, "followup_pending_count": 2,
+  "unchecked": [{"employee_id": "...", "full_name": "...", "department": "..."}]
+}
+```
+対象者 = 在籍中で顧客ロール以外の社員。受診済み = その年度の定期健診の `checkup_date` がある。
+
+**リマインド（`health_checkup.remind_followups`）**
+- 要フォローで未完了かつ期限ありの記録について、期限の 14 / 7 / 1 / 0 日前に本人へ通知する。
+- 期限超過後は 7 日ごとに本人と労務・人事へ通知する。
+
+**API**：`/api/v1/health-checkups/`（CRUD）、`/api/v1/health-checkups/summary/`
+
+### 7.7 1on1 記録
+
+**OneOnOneMeeting**
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| manager_id / member_id | FK Employee | 上司・部下（`member.managers` に `manager` が含まれること） |
+| scheduled_at | TIMESTAMP | 実施日時 |
+| duration_minutes | INT | 既定 30 |
+| status | VARCHAR(20) | `scheduled` / `done` / `cancelled` |
+| agenda | TEXT | アジェンダ（双方が編集） |
+| shared_notes | TEXT | 共有メモ（双方が編集） |
+| manager_private_notes | TEXT | 上司だけのメモ（部下には返さない） |
+| action_items | JSONB | `[{"text": "...", "owner": "manager" または "member", "done": false}]` |
+| ai_summary | TEXT | AI 要約 |
+
+- 閲覧・編集は参加者2名のみ（人事・管理者も他人の1on1は見られない）。
+- 作成時に相手へ `one_on_one` 通知、前日に双方へリマインド（`one_on_one.remind_upcoming`）。
+
+**AI 要約（`POST /api/v1/one-on-one/meetings/{id}/ai-summary/`）**
+- 入力：アジェンダ、共有メモ、前回の1on1のアクションアイテム。**上司メモは送らない**（共有される要約に混ざらないようにするため）。
+- 出力（構造化出力で JSON スキーマを指定）：
+  ```json
+  { "summary": "要約（300字程度）",
+    "action_items": [{"text": "...", "owner": "manager"}],
+    "next_agenda": ["次回のアジェンダ案"] }
+  ```
+- `summary` は `ai_summary` に保存する。アクションアイテムとアジェンダ案は画面で確認してから取り込む。
+- 使用モデル：`claude-opus-5-5`（effort `low`）。拒否時に別モデルで再実行するサーバー側フォールバック（`fallbacks: "default"`）を有効にする。
+
+### 7.8 Slack / Teams 通知連携
+
+**WebhookEndpoint（全社向け。管理者が設定）**
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| name | VARCHAR(100) | 例：労務チャンネル |
+| provider | VARCHAR(10) | `slack` / `teams` |
+| url | VARCHAR(500) | Incoming Webhook URL |
+| notification_types | JSONB | 転送する通知種別（1つ以上必須） |
+| is_active | BOOL | |
+
+**個人向け**：`User.personal_webhook_provider` / `personal_webhook_url`。本人宛ての通知をすべて転送する。
+
+**送信ルール**
+- `Notification.send()` で通知を作成した後に送信する。送信は別スレッドで行い、失敗してもアプリ内通知の作成は成功させる（失敗はログのみ）。
+- 全社 Webhook には `stress_check` と `health_checkup` の通知を送らない（設定でも選べない）。
+- URL は https のみ。Slack は `hooks.slack.com`、Teams は `*.webhook.office.com`、`*.logic.azure.com`、`*.powerplatform.com` のみ許可する（SSRF 対策）。
+- メッセージ：Slack は `{"text": "*タイトル*\nメッセージ\n<URL|画面を開く>"}`、Teams は Adaptive Card（Workflows の「Webhook 要求を受信したらチャネルに投稿する」形式）。全社向けには宛先の氏名を先頭に付ける。
+
+**API**
+
+| メソッド | パス | 権限 | 説明 |
+|---|---|---|---|
+| GET/POST | `/api/v1/notifications/webhooks/` | 管理者（GET は人事も可） | 全社 Webhook |
+| PATCH/DELETE | `/api/v1/notifications/webhooks/{id}/` | 管理者 | |
+| POST | `/api/v1/notifications/webhooks/{id}/test/` | 管理者 | テスト送信 |
+| GET/PUT | `/api/v1/notifications/personal-webhook/` | 本人 | 個人 Webhook の取得・設定（空文字で解除） |
+| POST | `/api/v1/notifications/personal-webhook/test/` | 本人 | テスト送信 |
+
+### 7.9 スマホ対応（PWA）
+
+- `app/manifest.ts` で Web App Manifest を出力する（`display: standalone`、ショートカット「打刻」→ `/clock`）。
+- `public/sw.js`：画面遷移はネットワーク優先、オフライン時は `/offline.html` を表示する。API 応答はキャッシュしない（勤怠・給与データを端末に残さないため）。
+- `/clock`：サイドバーなしの全画面打刻ページ。出勤・退勤ボタン、今日の打刻時刻、位置情報の記録有無を表示する。
+- 打刻時は `navigator.geolocation.getCurrentPosition`（タイムアウト5秒）で位置を取得し、拒否・失敗時は位置なしで打刻する。
+- メインレイアウトは `md` 未満でサイドバーを隠し、ヘッダーのメニューボタンで開閉する。
+
+### 7.10 パルスサーベイ
+
+**テーブル**
+
+| テーブル | 主なカラム |
+|---|---|
+| PulseSurvey | title, description, start_date, end_date, is_published, is_anonymous（既定 true）, created_by |
+| PulseQuestion | survey_id, order, text, kind（`scale5`: 1〜5 / `enps`: 0〜10 / `text`: 自由記述）, is_required |
+| PulseParticipation | survey_id, employee_id, submitted_at（survey と employee で複合ユニーク。二重回答防止） |
+| PulseResponse | survey_id, answers（`{question_id: 値}`）, department（回答時点の部署）, employee_id（記名式のときのみ）, submitted_at |
+
+- 匿名の場合、回答（PulseResponse）に社員 ID を持たない。回答済みかどうかは PulseParticipation だけで判定する。
+- 質問を指定せずに作成した場合は既定の5問（eNPS・仕事の満足度・上司のサポート・チームの雰囲気・自由記述）を作る。
+- 公開時に顧客以外の全社員へ通知し、回答期限の2日前に未回答者へリマインドする。
+
+**集計（`GET /api/v1/pulse/surveys/{id}/results/`、人事のみ）**
+- 回答数が `PULSE_MIN_GROUP_SIZE` 未満なら集計を返さない（`"insufficient": true`）。
+- 質問ごと：`scale5` は平均と1〜5の分布、`enps` は eNPS（推奨者 9〜10 の割合 − 批判者 0〜6 の割合）と分布、`text` は回答の一覧（順序をシャッフル）。
+- 部署別：回答数が `PULSE_MIN_GROUP_SIZE` 以上の部署のみ、数値質問の平均を返す。
+
+**API**
+
+| メソッド | パス | 権限 | 説明 |
+|---|---|---|---|
+| GET | `/api/v1/pulse/surveys/` | 全員（人事は未公開も含む） | 一覧（`has_answered` 付き） |
+| POST/PATCH/DELETE | `/api/v1/pulse/surveys/` | 人事 | 作成・編集（公開後は質問を変更不可） |
+| POST | `/api/v1/pulse/surveys/{id}/publish/` | 人事 | 公開・通知 |
+| POST | `/api/v1/pulse/surveys/{id}/answer/` | 全員 | 回答（期間内・1回のみ） |
+| GET | `/api/v1/pulse/surveys/{id}/results/` | 人事 | 集計 |

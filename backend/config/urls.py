@@ -30,6 +30,10 @@ urlpatterns = [
     path('api/v1/stress-check/',  include('apps.stress_check.urls')),
     path('api/v1/calendar/',      include('apps.calendar_sync.urls')),
     path('api/v1/compliance/',    include('apps.compliance.urls')),
+    path('api/v1/scheduler/',     include('apps.scheduler.urls')),
+    path('api/v1/health-checkups/', include('apps.health_checkup.urls')),
+    path('api/v1/one-on-one/',    include('apps.one_on_one.urls')),
+    path('api/v1/pulse/',         include('apps.pulse_survey.urls')),
     # API ドキュメント
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/',   SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

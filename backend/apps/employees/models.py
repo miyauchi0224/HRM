@@ -98,3 +98,45 @@ class FamilyMember(SoftDeleteModel):
 
     class Meta:
         verbose_name = '家族構成'
+
+
+class EmploymentHistory(SoftDeleteModel):
+    """
+    異動・昇格履歴（詳細設計書 7.5）
+
+    - 社員情報の部署・役職・等級・雇用形態が変わると自動で記録される（is_applied=True）
+    - 人事が未来日の発令を登録すると is_applied=False で予約され、発令日に反映される
+    """
+    class ChangeType(models.TextChoices):
+        TRANSFER        = 'transfer',               '異動'
+        PROMOTION       = 'promotion',              '昇格'
+        DEMOTION        = 'demotion',               '降格'
+        POSITION_CHANGE = 'position_change',        '役職変更'
+        EMPLOYMENT_TYPE = 'employment_type_change', '雇用形態変更'
+        OTHER           = 'other',                  'その他'
+
+    id                     = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    employee               = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='employment_histories')
+    effective_date         = models.DateField(verbose_name='発令日')
+    change_type            = models.CharField(max_length=30, choices=ChangeType.choices, verbose_name='種別')
+    department_before      = models.CharField(max_length=100, blank=True)
+    department_after       = models.CharField(max_length=100, blank=True)
+    position_before        = models.CharField(max_length=100, blank=True)
+    position_after         = models.CharField(max_length=100, blank=True)
+    grade_before           = models.PositiveIntegerField(null=True, blank=True)
+    grade_after            = models.PositiveIntegerField(null=True, blank=True)
+    employment_type_before = models.CharField(max_length=20, blank=True)
+    employment_type_after  = models.CharField(max_length=20, blank=True)
+    note                   = models.TextField(blank=True, verbose_name='発令内容・理由')
+    is_applied             = models.BooleanField(default=True, verbose_name='反映済み')
+    applied_at             = models.DateTimeField(null=True, blank=True)
+    created_by             = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                               related_name='+')
+    created_at             = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '異動・昇格履歴'
+        ordering     = ['-effective_date', '-created_at']
+
+    def __str__(self):
+        return f'{self.employee} {self.effective_date} {self.get_change_type_display()}'

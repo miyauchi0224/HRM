@@ -58,6 +58,12 @@ Excel の作業表・紙・メールなどに情報が散らばっていまし�
 | **ストレスチェック** | 厚労省標準 57 問・高ストレス判定・集団分析 |
 | **オンボーディング** | 入社手続きタスクのテンプレート管理・進捗トラッキング |
 | **AIアシスタント** | HRデータ自然言語照会・MBO目標下書き・日報下書き・領収書 OCR |
+| **1on1** | 上司と部下の1on1の予定・共有メモ・上司メモ（非公開）・アクションアイテム、AI による要約と次回アジェンダ案 |
+| **健康診断** | 自分の受診記録・判定・再検査の期限を確認（労務・人事が登録） |
+| **パルスサーベイ** | 匿名の短いアンケート（eNPS など）に回答 |
+| **代理承認設定** | 不在の間、代理人が休暇・経費・打刻修正・稟議を承認できる |
+| **スマホ打刻（PWA）** | ホーム画面に追加できる打刻画面（`/clock`）。打刻時の IP と位置（許可時のみ）を記録 |
+| **通知の転送** | 自分宛ての通知を Slack / Teams にも届ける |
 
 ### 管理職以上
 
@@ -77,6 +83,17 @@ Excel の作業表・紙・メールなどに情報が散らばっていまし�
 | **給与計算** | 全社員の給与明細計算・手動修正（経理も可） |
 
 ---
+
+### v1.1 で追加した運用まわりの機能
+
+[基本設計書 11章](design.md#11-運用強化機能v11-追加) と [詳細設計書 7章](design_detail.md#7-運用強化機能の詳細設計v11) に詳細があります。
+
+- **定期実行基盤**：毎朝 6:00 に定期ジョブを実行（docker compose の `scheduler` サービス）。実行履歴は `/system` で確認
+- **有給の自動付与・年5日取得義務**：入社日基準の自動付与・年度繰越・年5日未達者への警告。管理職・労務・人事は `/leave/obligation` で一覧
+- **承認リマインド・代理承認**：承認待ちが3日ごとに再通知され、代理人にも届く
+- **休日出勤・代休・勤務間インターバル**：打刻日を平日／所定休日／法定休日に自動判定。代休申請、11時間未満の勤務間インターバルの警告、給与の休日・深夜割増
+- **異動・昇格履歴**：社員情報の変更を自動記録。未来日付の発令予約、過去時点の組織図
+- **健康診断・パルスサーベイ・1on1・Slack / Teams 連携**（上の表を参照）
 
 ## 技術スタック
 
@@ -150,6 +167,10 @@ HRM/
 │   │   ├── stress_check/     # ストレスチェック（57 問・集団分析）
 │   │   ├── calendar_sync/    # 祝日・Microsoft/Google カレンダー連携
 │   │   ├── compliance/       # コンプライアンスチェックリスト（労務）
+│   │   ├── scheduler/        # 定期実行基盤（ジョブ登録・実行履歴）
+│   │   ├── health_checkup/   # 健康診断
+│   │   ├── one_on_one/       # 1on1（AI 要約）
+│   │   ├── pulse_survey/     # パルスサーベイ（匿名集計）
 │   │   └── common/           # 共通基盤（SoftDelete・AuditLog）
 │   ├── config/               # Django 設定・URL ルーティング
 │   └── template/             # OC 作業表テンプレート (XLSX)
@@ -256,6 +277,8 @@ cp backend/.env.example backend/.env  # Django 用
 
 # 3. コンテナを起動
 docker compose up -d
+# ※ scheduler サービスが毎朝 6:00 に定期ジョブ（有給付与・各種リマインド）を実行します。
+#   手動で1回だけ実行する場合: docker compose exec backend python manage.py run_jobs [--date YYYY-MM-DD] [--job ジョブ名]
 
 # 4. マイグレーションを実行
 docker compose exec backend python manage.py migrate
@@ -327,6 +350,17 @@ docker compose exec backend pytest
 ユーザーごとに個別キーを設定できます（設定画面 → API キー管理）。個別キーが優先されます。
 設定画面では Anthropic / OpenAI のどちらのキーを使うかを選んで登録できます。
 
+### 運用強化機能の設定（オプション）
+
+| 変数 | 既定値 | 説明 |
+|---|---|---|
+| `SCHEDULER_RUN_AT` | `06:00` | 定期ジョブの実行時刻 |
+| `APPROVAL_REMIND_DAYS` | `3` | 承認待ちを再通知する間隔（日） |
+| `WORK_INTERVAL_MINUTES` | `660` | 勤務間インターバルの基準（分） |
+| `COMPENSATORY_LEAVE_VALID_DAYS` | `90` | 休日出勤から代休を取得できる期限（日） |
+| `PULSE_MIN_GROUP_SIZE` | `5` | パルスサーベイの集計を表示する最小人数 |
+| `FRONTEND_URL` | `http://localhost:3000` | Slack / Teams 通知に載せる画面 URL の起点 |
+
 ### カレンダー連携設定（オプション）
 
 | 変数 | 説明 |
@@ -377,6 +411,15 @@ docker compose exec backend pytest
 | `POST /api/v1/stress-check/responses/{id}/submit/` | 最終提出・スコア計算 |
 | `GET /api/v1/calendar/...` | 祝日・カレンダー予定・OAuth 連携 |
 | `GET /api/v1/compliance/...` | コンプライアンスチェックリスト |
+| `GET /api/v1/leave/grants/obligation/` | 自分の有給 年5日取得の状況 |
+| `GET/POST /api/v1/approval/delegations/` | 代理承認の設定 |
+| `GET /api/v1/attendance/holiday-work/` | 代休の元にできる休日出勤 |
+| `GET/POST /api/v1/employees/{id}/history/` | 異動・昇格履歴・発令登録 |
+| `GET/POST /api/v1/health-checkups/` | 健康診断（`summary/` で受診率） |
+| `GET/POST /api/v1/one-on-one/meetings/` | 1on1（`{id}/ai-summary/` で AI 要約） |
+| `GET/POST /api/v1/pulse/surveys/` | パルスサーベイ（`{id}/answer/`・`{id}/results/`） |
+| `GET/POST /api/v1/notifications/webhooks/` | 全社の Slack / Teams 転送先 |
+| `GET /api/v1/scheduler/jobs/` | 定期ジョブと最終実行結果 |
 | `GET /api/v1/health/` | ヘルスチェック |
 | `GET /api/docs/` | Swagger UI（全 API ドキュメント） |
 
@@ -418,7 +461,7 @@ common.AuditLog              全操作ログ（誰がいつ何を）
 - **論理削除**: 全モデルで `is_deleted` フラグによる論理削除を採用。物理削除は原則禁止
 - **社員削除**: 社員を削除すると勤怠・給与・評価など全関連データが連動して論理削除される
 - **AI 機能**: Claude Sonnet 4.6（HRクエリ）と Haiku 4.5（下書き・OCR）を用途別に使い分け
-- **36協定閾値**: 月 45h（警告）/ 60h（超過）、年 320h（警告）/ 360h（超過）
+- **36協定閾値**: 月 45h（警告）/ 60h（超過）、年 320h（警告）/ 360h（超過）。法定休日労働は時間外に含めず、休日労働として別計上
 - **ストレスチェック**: スコア 77 点以上を高ストレスと判定（逆転項目を考慮した加算方式）
 - **OC作業表テンプレート**: `backend/template/OC作業表（名前）2026年度.xlsx` を XLSX エクスポートのベースとして使用
 - **Swagger UI**: 開発中は `http://localhost:8000/api/docs/` で全 API を確認可能

@@ -2,6 +2,7 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { getPunchLocation } from '@/lib/geo'
 import { useAuthStore } from '@/lib/store'
 import {
   Clock, Play, Square, Download, Upload,
@@ -96,12 +97,12 @@ export default function AttendancePage() {
   }
 
   const clockInMutation = useMutation({
-    mutationFn: () => api.post('/api/v1/attendance/clock-in/', {}),
+    mutationFn: async () => api.post('/api/v1/attendance/clock-in/', await getPunchLocation()),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
   })
 
   const clockOutMutation = useMutation({
-    mutationFn: () => api.post('/api/v1/attendance/clock-out/', { break_minutes: breakMinutes }),
+    mutationFn: async () => api.post('/api/v1/attendance/clock-out/', { break_minutes: breakMinutes, ...(await getPunchLocation()) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
   })
 
@@ -485,6 +486,17 @@ export default function AttendancePage() {
                             <span>{formatDateWithDay(r.date)}</span>
                             {isHoliday && (
                               <span className="block text-red-400 text-[10px] leading-tight">{holidayMap[r.date]}</span>
+                            )}
+                            {r.day_type && r.day_type !== 'weekday' && r.clock_in && (
+                              <span className="block text-[10px] leading-tight text-purple-600">
+                                {r.day_type === 'legal_holiday' ? '法定休日出勤' : '所定休日出勤'}
+                              </span>
+                            )}
+                            {r.rest_interval_minutes != null && r.rest_interval_minutes < 660 && (
+                              <span className="block text-[10px] leading-tight text-amber-600"
+                                    title="前回の退勤から11時間未満で出勤しています">
+                                インターバル {Math.floor(r.rest_interval_minutes / 60)}h{r.rest_interval_minutes % 60}m
+                              </span>
                             )}
                           </td>
                           <td className="py-2 text-xs whitespace-nowrap text-orange-600 font-medium">

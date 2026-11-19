@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { getPunchLocation } from '@/lib/geo'
 import { useAuthStore } from '@/lib/store'
 import { Clock, Calendar, Target, Bell, CheckSquare, Newspaper, Pin, Play, Square, GanttChartSquare } from 'lucide-react'
 import Link from 'next/link'
@@ -30,7 +31,7 @@ export default function DashboardPage() {
   const isDone      = todayRecord?.clock_out
 
   const clockInMut = useMutation({
-    mutationFn: () => api.post('/api/v1/attendance/clock-in/', {}),
+    mutationFn: async () => api.post('/api/v1/attendance/clock-in/', await getPunchLocation()),
     onSuccess: () => {
       setClockError(null)
       qc.invalidateQueries({ queryKey: ['attendance'] })
@@ -45,7 +46,7 @@ export default function DashboardPage() {
     },
   })
   const clockOutMut = useMutation({
-    mutationFn: () => api.post('/api/v1/attendance/clock-out/', { break_minutes: 60 }),
+    mutationFn: async () => api.post('/api/v1/attendance/clock-out/', { break_minutes: 60, ...(await getPunchLocation()) }),
     onSuccess: () => {
       setClockError(null)
       qc.invalidateQueries({ queryKey: ['attendance'] })

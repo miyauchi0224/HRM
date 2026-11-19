@@ -116,6 +116,11 @@ class AttendanceRecord(SoftDeleteModel):
         CONFIRMED = 'confirmed', '確定'
         MODIFIED  = 'modified',  '修正済'
 
+    class DayType(models.TextChoices):
+        WEEKDAY           = 'weekday',           '平日'
+        NON_LEGAL_HOLIDAY = 'non_legal_holiday', '所定休日'
+        LEGAL_HOLIDAY     = 'legal_holiday',     '法定休日'
+
     id             = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     employee       = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='attendance_records')
     date           = models.DateField(verbose_name='日付')
@@ -125,6 +130,17 @@ class AttendanceRecord(SoftDeleteModel):
     stamped_clock_out = models.TimeField(null=True, blank=True, verbose_name='退勤打刻時刻（原本）')
     break_minutes  = models.PositiveIntegerField(default=60, verbose_name='休憩時間（分）')
     status         = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    day_type       = models.CharField(max_length=20, choices=DayType.choices, default=DayType.WEEKDAY,
+                                      verbose_name='日の区分')
+    rest_interval_minutes = models.PositiveIntegerField(null=True, blank=True,
+                                                        verbose_name='勤務間インターバル（分）')
+    # 打刻時の IP・位置（位置はブラウザで許可された場合のみ）
+    clock_in_ip         = models.GenericIPAddressField(null=True, blank=True, verbose_name='出勤打刻 IP')
+    clock_out_ip        = models.GenericIPAddressField(null=True, blank=True, verbose_name='退勤打刻 IP')
+    clock_in_latitude   = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    clock_in_longitude  = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    clock_out_latitude  = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    clock_out_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     note           = models.TextField(blank=True, verbose_name='備考')
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
@@ -150,8 +166,32 @@ class AttendanceRecord(SoftDeleteModel):
 
     @property
     def overtime_minutes(self):
-        """残業時間（分）= 実労働 - 480分（8時間）"""
+        """
+        時間外労働（分）。36協定の集計にも使う。
+        平日: 実労働 - 480分 / 所定休日: 実労働の全時間 / 法定休日: 0（休日労働として別計上）
+        """
+        if self.day_type == self.DayType.LEGAL_HOLIDAY:
+            return 0
+        if self.day_type == self.DayType.NON_LEGAL_HOLIDAY:
+            return self.work_minutes
         return max(0, self.work_minutes - 480)
+
+    @property
+    def holiday_work_minutes(self):
+        """法定休日の労働時間（分）。割増率 1.35"""
+        return self.work_minutes if self.day_type == self.DayType.LEGAL_HOLIDAY else 0
+
+    @property
+    def late_night_minutes(self):
+        """深夜（22:00〜翌5:00）に重なる分数。退勤は当日中の前提で、休憩は控除しない概算"""
+        if not self.clock_in or not self.clock_out:
+            return 0
+        start = self.clock_in.hour * 60 + self.clock_in.minute
+        end   = self.clock_out.hour * 60 + self.clock_out.minute
+        if end <= start:
+            return 0
+        overlap = lambda a, b: max(0, min(end, b) - max(start, a))
+        return overlap(0, 5 * 60) + overlap(22 * 60, 24 * 60)
 
 
 class AttendanceProjectRecord(SoftDeleteModel):

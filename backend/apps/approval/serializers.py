@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ApprovalRequest, ApprovalStep, ApprovalTemplate, ApprovalAttachment
+from .models import ApprovalRequest, ApprovalStep, ApprovalTemplate, ApprovalAttachment, ApprovalDelegation
 from apps.employees.models import Employee
 
 
@@ -22,11 +22,40 @@ class ApprovalTemplateSerializer(serializers.ModelSerializer):
 class ApprovalStepSerializer(serializers.ModelSerializer):
     approver_name = serializers.CharField(source='approver.full_name', read_only=True)
     step_role_label = serializers.CharField(source='get_step_role_display', read_only=True)
+    decided_by_name = serializers.CharField(source='decided_by.full_name', read_only=True, default=None)
 
     class Meta:
         model = ApprovalStep
         fields = ['id', 'approver', 'approver_name', 'step_role', 'step_role_label',
-                  'order', 'decision', 'comment', 'decided_at']
+                  'order', 'decision', 'comment', 'decided_at', 'decided_by', 'decided_by_name']
+
+
+class ApprovalDelegationSerializer(serializers.ModelSerializer):
+    delegator_name = serializers.CharField(source='delegator.full_name', read_only=True)
+    delegate_name  = serializers.CharField(source='delegate.full_name', read_only=True)
+    is_active      = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = ApprovalDelegation
+        fields = ['id', 'delegator', 'delegator_name', 'delegate', 'delegate_name',
+                  'start_date', 'end_date', 'reason', 'is_active', 'created_at']
+        read_only_fields = ['id', 'created_at']
+        extra_kwargs = {'delegator': {'required': False}}
+
+    def get_is_active(self, obj):
+        from datetime import date
+        return obj.start_date <= date.today() <= obj.end_date
+
+    def validate(self, data):
+        delegator = data.get('delegator') or getattr(self.instance, 'delegator', None)
+        delegate  = data.get('delegate') or getattr(self.instance, 'delegate', None)
+        start     = data.get('start_date') or getattr(self.instance, 'start_date', None)
+        end       = data.get('end_date') or getattr(self.instance, 'end_date', None)
+        if delegator and delegate and delegator.pk == delegate.pk:
+            raise serializers.ValidationError({'delegate': '自分自身を代理人にはできません'})
+        if start and end and end < start:
+            raise serializers.ValidationError({'end_date': '終了日は開始日以降にしてください'})
+        return data
 
 
 class ApprovalRequestSerializer(serializers.ModelSerializer):

@@ -3,7 +3,8 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { FileText, Plus, CheckCircle, XCircle, Clock, ChevronRight, Paperclip, Download, X, File } from 'lucide-react'
+import { FileText, Plus, CheckCircle, XCircle, Clock, ChevronRight, Paperclip, Download, X, File, UserCheck } from 'lucide-react'
+import Link from 'next/link'
 
 interface ApprovalStep {
   id: string
@@ -15,6 +16,7 @@ interface ApprovalStep {
   decision: string
   comment: string
   decided_at: string | null
+  decided_by_name: string | null
 }
 
 interface FileAttachment {
@@ -186,12 +188,20 @@ export default function ApprovalPage() {
             <p className="text-sm text-gray-500">起案者 → 上司 → 部門長 → 財務 の承認フロー</p>
           </div>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
-        >
-          <Plus size={18} /> 新規起案
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/approval/delegation"
+            className="flex items-center gap-1.5 border border-gray-300 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
+          >
+            <UserCheck size={16} /> 代理承認設定
+          </Link>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+          >
+            <Plus size={18} /> 新規起案
+          </button>
+        </div>
       </div>
 
       {/* KPI */}
@@ -533,6 +543,9 @@ function DecideModal({ req, onClose, onDecide, isPending }: {
                   }`}>
                     <Icon size={11} className={dcfg.color} />
                     <span>{STEP_ROLE_ICON[step.step_role]}: {step.approver_name}</span>
+                    {step.decided_by_name && step.decided_by_name !== step.approver_name && (
+                      <span className="font-normal">（代理: {step.decided_by_name}）</span>
+                    )}
                   </div>
                 </div>
               )

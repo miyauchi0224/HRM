@@ -17,7 +17,9 @@ from .models import Employee, EmergencyContact
 from .serializers import (
     EmployeeListSerializer, EmployeeDetailSerializer, CreateEmployeeSerializer,
     EmergencyContactSerializer, SelfUpdateSerializer,
+    EmploymentHistorySerializer, EmploymentOrderSerializer,
 )
+from .history import create_order, snapshot_as_of
 from apps.accounts.models import User
 from apps.common.mixins import SoftDeleteViewSetMixin
 from apps.common.models import AuditLog
@@ -72,9 +74,11 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             'allowances', 'payslips',
             'skills',
             'enrollments', 'quiz_attempts',
-            'leave_balances', 'leave_requests',
+            'leave_balances', 'leave_requests', 'leave_grants',
             'approval_requests', 'approval_steps',
+            'delegations_given', 'delegations_received',
             'intra_comments',
+            'employment_histories', 'health_checkups',
         ]
         for name in _RELATED_NAMES:
             mgr = getattr(instance, name, None)
@@ -139,6 +143,31 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             'email': user.email if has_real_email else None,
             'temp_password': temp_password if has_real_email else None,
         }, status=status.HTTP_201_CREATED)
+
+    def perform_update(self, serializer):
+        # 異動・昇格履歴の自動記録に操作者を残す
+        serializer.instance._history_user = self.request.user
+        serializer.save()
+
+    @action(detail=True, methods=['get', 'post'], url_path='history')
+    def history(self, request, pk=None):
+        """
+        GET  /api/v1/employees/{id}/history/ - 異動・昇格履歴（本人・管理職以上）
+        POST /api/v1/employees/{id}/history/ - 発令登録（人事のみ。未来日は予約）
+        """
+        emp = self.get_object()
+        if request.method == 'GET':
+            if emp.user != request.user and not request.user.is_manager:
+                return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
+            return Response(EmploymentHistorySerializer(emp.employment_histories.all(), many=True).data)
+
+        if not request.user.is_hr:
+            return Response({'error': '人事担当以上の権限が必要です'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = EmploymentOrderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+        history = create_order(emp, d['effective_date'], d, d.get('note', ''), request.user)
+        return Response(EmploymentHistorySerializer(history).data, status=status.HTTP_201_CREATED)
 
     def _can_edit_employee(self, request, employee):
         """本人または管理職・人事・管理者のみ編集可"""
@@ -417,22 +446,50 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='org-chart')
     def org_chart(self, request):
-        """GET /api/v1/employees/org-chart/ - 組織図データ"""
+        """
+        GET /api/v1/employees/org-chart/ - 組織図データ
+        ?as_of=YYYY-MM-DD で指定日時点の部署・役職・等級を返す（管理職以上）
+        """
+        as_of = None
+        if request.query_params.get('as_of'):
+            if not request.user.is_manager:
+                return Response({'error': '過去時点の組織図は管理職以上のみ参照できます'},
+                                status=status.HTTP_403_FORBIDDEN)
+            try:
+                as_of = date.fromisoformat(request.query_params['as_of'])
+            except ValueError:
+                return Response({'error': 'as_of は YYYY-MM-DD 形式で指定してください'},
+                                status=status.HTTP_400_BAD_REQUEST)
+
         employees = Employee.objects.select_related('user').prefetch_related('managers', 'subordinates').all()
+        histories = {}
+        if as_of:
+            # 指定日に在籍していた社員に絞る
+            employees = [e for e in employees
+                         if (e.hire_date is None or e.hire_date <= as_of)
+                         and (e.retire_date is None or e.retire_date > as_of)]
+            from .models import EmploymentHistory
+            for h in EmploymentHistory.objects.filter(is_applied=True).order_by('effective_date', 'created_at'):
+                histories.setdefault(h.employee_id, []).append(h)
+
         request_base = request.build_absolute_uri('/')[:-1]
         data = []
         for emp in employees:
             avatar_url = None
             if emp.avatar:
                 avatar_url = f'{request_base}{emp.avatar.url}'
+            snap = snapshot_as_of(emp, as_of, histories.get(emp.id, [])) if as_of else {
+                'department': emp.department, 'position': emp.position,
+                'grade': emp.grade, 'employment_type': emp.employment_type,
+            }
             data.append({
                 'id':              str(emp.id),
                 'full_name':       emp.full_name,
-                'department':      emp.department,
-                'position':        emp.position,
-                'grade':           emp.grade,
-                'employment_type': emp.employment_type,
-                'is_active':       emp.retire_date is None,
+                'department':      snap['department'],
+                'position':        snap['position'],
+                'grade':           snap['grade'],
+                'employment_type': snap['employment_type'],
+                'is_active':       emp.retire_date is None if not as_of else True,
                 'avatar_url':      avatar_url,
                 'manager_ids':     [str(m.id) for m in emp.managers.all()],
             })

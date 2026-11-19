@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { useAuthStore } from '@/lib/store'
 import { Building2, X, Phone, AlertCircle, Mail, Calendar, Briefcase, User } from 'lucide-react'
 
 interface OrgNode {
@@ -41,10 +42,14 @@ const EMPLOYMENT_LABEL: Record<string, string> = {
 
 export default function OrgChartPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // 過去時点の組織図（異動・昇格履歴から再現。管理職以上）
+  const [asOf, setAsOf] = useState('')
+  const role      = useAuthStore((s) => s.user?.role ?? 'employee')
+  const canAsOf   = ['manager', 'hr', 'accounting', 'admin'].includes(role)
 
   const { data: nodes = [], isLoading } = useQuery<OrgNode[]>({
-    queryKey: ['org-chart'],
-    queryFn: () => api.get('/api/v1/employees/org-chart/').then((r) => r.data),
+    queryKey: ['org-chart', asOf],
+    queryFn: () => api.get(`/api/v1/employees/org-chart/${asOf ? `?as_of=${asOf}` : ''}`).then((r) => r.data),
   })
 
   const { data: detail, isLoading: detailLoading } = useQuery<EmployeeDetail>({
@@ -76,9 +81,20 @@ export default function OrgChartPage() {
     <div className="flex gap-5 h-[calc(100vh-96px)]">
       {/* 左: 組織図本体 */}
       <div className={`flex-1 overflow-y-auto transition-all ${selectedId ? 'min-w-0' : ''}`}>
-        <h1 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-          <Building2 size={22} /> 組織図
-        </h1>
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <Building2 size={22} /> 組織図
+            {asOf && <span className="text-sm font-normal text-amber-700 bg-amber-50 px-2 py-0.5 rounded">{asOf} 時点</span>}
+          </h1>
+          {canAsOf && (
+            <label className="text-sm text-gray-600 flex items-center gap-2">
+              時点
+              <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)}
+                     className="px-2 py-1 border border-gray-300 rounded-lg text-sm" />
+              {asOf && <button onClick={() => setAsOf('')} className="text-xs text-blue-600">現在に戻す</button>}
+            </label>
+          )}
+        </div>
 
         {nodes.length === 0 ? (
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center">

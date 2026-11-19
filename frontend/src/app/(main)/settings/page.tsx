@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import WebhookSection from './WebhookSection'
 import {
   Settings, Key, Eye, EyeOff, CheckCircle, AlertCircle,
   Bot, User, Mail, Shield, Lock, Phone, MapPin, Plus, Pencil, Trash2, X, Save,
@@ -107,6 +108,9 @@ export default function SettingsPage() {
 
       {/* ── AI機能設定 ── */}
       <AIKeySection />
+
+      {/* ── 通知の転送（Slack / Teams） ── */}
+      <WebhookSection />
     </div>
   )
 }

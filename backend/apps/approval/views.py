@@ -6,8 +6,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from .models import ApprovalRequest, ApprovalStep, ApprovalTemplate, ApprovalAttachment
-from .serializers import ApprovalRequestSerializer, ApprovalTemplateSerializer, ApprovalAttachmentSerializer
+from django.db.models import Q
+
+from .models import ApprovalRequest, ApprovalStep, ApprovalTemplate, ApprovalAttachment, ApprovalDelegation
+from .serializers import (
+    ApprovalRequestSerializer, ApprovalTemplateSerializer, ApprovalAttachmentSerializer,
+    ApprovalDelegationSerializer,
+)
+from .delegation import can_act_for, delegators_for, notify_approvers
 from apps.notifications.models import Notification
 from apps.accounts.permissions import IsNotCustomer
 from apps.common.mixins import SoftDeleteViewSetMixin
@@ -28,7 +34,10 @@ class ApprovalRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         qs = ApprovalRequest.objects.select_related('applicant', 'template').prefetch_related('steps')
         if user.is_manager:
             return qs.all()
-        return qs.filter(applicant__user=user)
+        # 自分の申請に加え、自分が承認者（または代理人）になっている申請も見られる
+        employee   = getattr(user, 'employee', None)
+        approvers  = [employee, *delegators_for(employee)] if employee else []
+        return qs.filter(Q(applicant__user=user) | Q(steps__approver__in=approvers)).distinct()
 
     def perform_create(self, serializer):
         serializer.save(applicant=self.request.user.employee)
@@ -95,14 +104,13 @@ class ApprovalRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         obj.status = ApprovalRequest.Status.PENDING
         obj.submitted_at = timezone.now()
         obj.save()
-        for step in obj.steps.filter(order=1):
-            Notification.send(
-                user=step.approver.user,
-                type_=Notification.NotificationType.EXPENSE_REQUEST,
-                title='稟議申請',
-                message=f'{obj.applicant.full_name}さんから稟議申請「{obj.title}」が届きました',
-                related_url='/approval',
-            )
+        notify_approvers(
+            [step.approver for step in obj.steps.filter(order=1).select_related('approver__user')],
+            type_=Notification.NotificationType.EXPENSE_REQUEST,
+            title='稟議申請',
+            message=f'{obj.applicant.full_name}さんから稟議申請「{obj.title}」が届きました',
+            related_url='/approval',
+        )
         return Response(ApprovalRequestSerializer(obj).data)
 
     @action(detail=True, methods=['patch'], url_path='decide')
@@ -117,7 +125,9 @@ class ApprovalRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         except Exception:
             return Response({'error': '社員情報が見つかりません'}, status=status.HTTP_403_FORBIDDEN)
 
-        step = obj.steps.filter(approver=employee, decision=ApprovalStep.Decision.PENDING).first()
+        # 本人のステップ、または代理人として判断できるステップ（順序の早いもの）
+        pending = obj.steps.filter(decision=ApprovalStep.Decision.PENDING).select_related('approver')
+        step = next((s for s in pending if can_act_for(employee, s.approver)), None)
         if not step:
             return Response({'error': 'この申請の承認者ではありません'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -125,6 +135,7 @@ class ApprovalRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         step.decision = decision
         step.comment = request.data.get('comment', '')
         step.decided_at = timezone.now()
+        step.decided_by = employee
         step.save()
 
         if decision == 'rejected':
@@ -140,8 +151,8 @@ class ApprovalRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         else:
             next_step = obj.steps.filter(order=step.order + 1, decision=ApprovalStep.Decision.PENDING).first()
             if next_step:
-                Notification.send(
-                    user=next_step.approver.user,
+                notify_approvers(
+                    [next_step.approver],
                     type_=Notification.NotificationType.EXPENSE_REQUEST,
                     title='稟議承認依頼',
                     message=f'「{obj.title}」の承認をお願いします',
@@ -158,6 +169,8 @@ class ApprovalRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
                     related_url='/approval',
                 )
 
+        # get_queryset の prefetch（steps）は更新前のままなので取り直して返す
+        obj = self.get_queryset().get(pk=obj.pk)
         return Response(ApprovalRequestSerializer(obj).data)
 
     @action(detail=True, methods=['post'], url_path='withdraw')
@@ -223,3 +236,49 @@ class ApprovalRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         response = FileResponse(attach.file.open('rb'), content_type=attach.content_type)
         response['Content-Disposition'] = f'attachment; filename="{attach.file_name}"'
         return response
+
+
+class ApprovalDelegationViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
+    """
+    代理承認の設定
+
+    一覧: 自分が委任元・代理人のもの（人事は全件）
+    登録: 自分を委任元として登録（人事は delegator を指定して他人の分も登録できる）
+    """
+    serializer_class   = ApprovalDelegationSerializer
+    permission_classes = [IsNotCustomer]
+    http_method_names  = ['get', 'post', 'delete', 'head', 'options']
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = ApprovalDelegation.objects.select_related('delegator', 'delegate')
+        if user.is_hr:
+            return qs.all()
+        return qs.filter(Q(delegator__user=user) | Q(delegate__user=user))
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+        employee = getattr(self.request.user, 'employee', None)
+        delegator = serializer.validated_data.get('delegator')
+        if delegator is None:
+            if employee is None:
+                raise ValidationError({'delegator': '社員情報が登録されていません'})
+            delegator = employee
+        elif delegator != employee and not self.request.user.is_hr:
+            raise PermissionDenied('他の社員の代理設定は人事のみ登録できます')
+        if delegator.pk == serializer.validated_data['delegate'].pk:
+            raise ValidationError({'delegate': '自分自身を代理人にはできません'})
+        obj = serializer.save(delegator=delegator)
+        Notification.send(
+            user=obj.delegate.user,
+            type_=Notification.NotificationType.SYSTEM,
+            title='代理承認者に設定されました',
+            message=f'{obj.start_date}〜{obj.end_date} の間、{obj.delegator.full_name}さんの代理で承認できます。',
+            related_url='/approval/delegation',
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        obj = self.get_object()
+        if obj.delegator.user != request.user and not request.user.is_hr:
+            return Response({'error': '委任元本人または人事のみ削除できます'}, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)

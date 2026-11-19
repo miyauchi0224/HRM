@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Employee, EmergencyContact, FamilyMember
+from .models import Employee, EmergencyContact, FamilyMember, EmploymentHistory
 from apps.accounts.models import User
 
 
@@ -13,6 +13,39 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model  = FamilyMember
         fields = ['id', 'name', 'relationship', 'birth_date', 'is_dependent']
+
+
+class EmploymentHistorySerializer(serializers.ModelSerializer):
+    change_type_label = serializers.CharField(source='get_change_type_display', read_only=True)
+    created_by_email  = serializers.CharField(source='created_by.email', read_only=True, default=None)
+
+    class Meta:
+        model  = EmploymentHistory
+        fields = [
+            'id', 'effective_date', 'change_type', 'change_type_label',
+            'department_before', 'department_after', 'position_before', 'position_after',
+            'grade_before', 'grade_after', 'employment_type_before', 'employment_type_after',
+            'note', 'is_applied', 'applied_at', 'created_by_email', 'created_at',
+        ]
+        read_only_fields = fields
+
+
+class EmploymentOrderSerializer(serializers.Serializer):
+    """人事の発令登録。変更後の項目は空欄なら変更しない"""
+    effective_date  = serializers.DateField()
+    change_type     = serializers.ChoiceField(choices=EmploymentHistory.ChangeType.choices,
+                                              required=False, allow_blank=True)
+    department      = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    position        = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    grade           = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    employment_type = serializers.ChoiceField(choices=Employee.EmploymentType.choices,
+                                              required=False, allow_blank=True)
+    note            = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, data):
+        if not any(data.get(f) not in (None, '') for f in ('department', 'position', 'grade', 'employment_type')):
+            raise serializers.ValidationError('変更後の部署・役職・等級・雇用形態のいずれかを入力してください')
+        return data
 
 
 class EmployeeListSerializer(serializers.ModelSerializer):
