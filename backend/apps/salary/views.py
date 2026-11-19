@@ -1,4 +1,5 @@
 import csv
+from apps.common.security import safe_csv_writer, set_xlsx_value
 import io
 from datetime import date
 from decimal import Decimal
@@ -89,7 +90,7 @@ class PayslipViewSet(viewsets.ReadOnlyModelViewSet):
         給与明細一括登録用 CSV テンプレートをダウンロード（経理・人事・管理者のみ）
         """
         buf = io.StringIO()
-        writer = csv.writer(buf)
+        writer = safe_csv_writer(buf)
         writer.writerow([
             '社員番号', '年', '月',
             '基本給', '技術手当', '出向手当', '住宅手当', '残業手当',
@@ -311,7 +312,7 @@ class PayslipViewSet(viewsets.ReadOnlyModelViewSet):
             return PatternFill(fill_type='solid', fgColor=color)
 
         def cell(row, col, value, font=None, fill=None, align='left', border_=True, number_format=None):
-            c = ws.cell(row=row, column=col, value=value)
+            c = set_xlsx_value(ws.cell(row=row, column=col), value)
             if font:   c.font = font
             if fill:   c.fill = fill
             if border_: c.border = border

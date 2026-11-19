@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from apps.accounts.permissions import IsNotCustomer, IsAccounting
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from django.http import HttpResponse, FileResponse
+from django.http import HttpResponse
 from django.utils import timezone
 
 from .models import AccountItem, ExpenseRequest, ExpenseAttachment
@@ -16,6 +16,7 @@ from .serializers import AccountItemSerializer, ExpenseRequestSerializer, Expens
 from apps.notifications.models import Notification
 from apps.employees.models import Employee
 from apps.common.mixins import SoftDeleteViewSetMixin
+from apps.common.security import validate_upload, attachment_response, safe_filename, safe_csv_writer
 from apps.approval.delegation import (
     delegated_applicant_filter, is_delegate_for_applicant, notify_approvers,
 )
@@ -41,7 +42,7 @@ class AccountItemViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         """
         items = AccountItem.objects.all().order_by('code')
         buf   = io.StringIO()
-        writer = csv.writer(buf)
+        writer = safe_csv_writer(buf)
         writer.writerow(['科目コード', '科目名', 'カテゴリ', '有効'])
         for item in items:
             writer.writerow([item.code, item.name, item.get_category_display(), '○' if item.is_active else '×'])
@@ -182,7 +183,7 @@ class ExpenseRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         経費申請一括登録用 CSV テンプレートをダウンロード（経理・人事・管理者のみ）
         """
         buf = io.StringIO()
-        writer = csv.writer(buf)
+        writer = safe_csv_writer(buf)
         writer.writerow([
             '社員番号', '経費区分', '支払方法', '勘定科目コード',
             '金額', '費用発生日', '内容説明', '領収書URL',
@@ -307,13 +308,14 @@ class ExpenseRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         file = request.FILES.get('file')
         if not file:
             return Response({'error': 'ファイルが指定されていません'}, status=status.HTTP_400_BAD_REQUEST)
+        content_type = validate_upload(file)
 
         attach = ExpenseAttachment.objects.create(
             request      = req,
             file         = file,
-            file_name    = file.name,
+            file_name    = safe_filename(file.name),
             file_size    = file.size,
-            content_type = file.content_type or 'application/octet-stream',
+            content_type = content_type,
         )
         return Response(ExpenseAttachmentSerializer(attach).data, status=status.HTTP_201_CREATED)
 
@@ -343,6 +345,4 @@ class ExpenseRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             attach = ExpenseAttachment.objects.get(id=attach_id, request=req)
         except ExpenseAttachment.DoesNotExist:
             return Response({'error': '添付ファイルが見つかりません'}, status=status.HTTP_404_NOT_FOUND)
-        response = FileResponse(attach.file.open('rb'), content_type=attach.content_type)
-        response['Content-Disposition'] = f'attachment; filename="{attach.file_name}"'
-        return response
+        return attachment_response(attach.file.open('rb'), attach.file_name)

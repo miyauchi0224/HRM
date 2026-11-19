@@ -2,6 +2,7 @@ import os
 import json
 import holidays
 import csv
+from apps.common.security import safe_csv_writer
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from django.conf import settings
@@ -624,7 +625,7 @@ class CalendarViewSet(viewsets.ViewSet):
         response['Content-Disposition'] = 'attachment; filename="calendar_events.csv"'
         response.write('﻿')  # UTF-8 BOM
 
-        writer = csv.writer(response)
+        writer = safe_csv_writer(response)
         writer.writerow(['タイトル', '開始日時', '終了日時', 'プロバイダー', '作成日'])
 
         for event in events:

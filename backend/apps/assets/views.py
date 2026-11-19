@@ -1,4 +1,5 @@
 import csv
+from apps.common.security import safe_csv_writer
 import io
 from datetime import date
 from django.utils import timezone
@@ -68,7 +69,7 @@ class AssetViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     def template_csv(self, request):
         """GET /api/v1/assets/items/template-csv/ — CSVテンプレートダウンロード"""
         buf = io.StringIO()
-        writer = csv.writer(buf)
+        writer = safe_csv_writer(buf)
         writer.writerow([
             '資産番号', '資産名', 'カテゴリ名', 'メーカー', '型番',
             'シリアル番号', '購入日(YYYY-MM-DD)', '購入金額(円)', '保管場所', '備考'

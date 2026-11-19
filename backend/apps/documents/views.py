@@ -1,11 +1,10 @@
-import mimetypes
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
-from django.http import FileResponse
 from apps.accounts.permissions import IsNotCustomer, IsHR
 from apps.common.mixins import SoftDeleteViewSetMixin
+from apps.common.security import validate_upload, attachment_response, safe_filename
 from .models import DocumentCategory, Document, DocumentFile
 from .serializers import DocumentCategorySerializer, DocumentSerializer, DocumentFileSerializer
 
@@ -93,18 +92,15 @@ class DocumentViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        content_type = validate_upload(file)
+
         latest = doc.files.order_by('-version').first()
         next_version = (latest.version + 1) if latest else 1
-        content_type = (
-            file.content_type
-            or mimetypes.guess_type(file.name)[0]
-            or 'application/octet-stream'
-        )
         doc_file = DocumentFile.objects.create(
             document=doc,
             version=next_version,
             file=file,
-            file_name=file.name,
+            file_name=safe_filename(file.name),
             file_size=file.size,
             content_type=content_type,
             uploaded_by=request.user,
@@ -118,6 +114,4 @@ class DocumentViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         if not latest:
             return Response({'error': 'ファイルがありません'}, status=status.HTTP_404_NOT_FOUND)
 
-        response = FileResponse(latest.file.open('rb'), content_type=latest.content_type)
-        response['Content-Disposition'] = f'attachment; filename="{latest.file_name}"'
-        return response
+        return attachment_response(latest.file.open('rb'), latest.file_name)

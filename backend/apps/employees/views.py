@@ -22,6 +22,7 @@ from .serializers import (
 from .history import create_order, snapshot_as_of
 from apps.accounts.models import User
 from apps.common.mixins import SoftDeleteViewSetMixin
+from apps.common.security import validate_upload, IMAGE_EXTENSIONS, safe_csv_writer
 from apps.common.models import AuditLog
 
 
@@ -257,6 +258,7 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         file = request.FILES.get('avatar')
         if not file:
             return Response({'error': 'ファイルが指定されていません'}, status=status.HTTP_400_BAD_REQUEST)
+        validate_upload(file, allowed=IMAGE_EXTENSIONS, max_size=5 * 1024 * 1024)
 
         # 既存アバターを削除
         if emp.avatar:
@@ -278,7 +280,7 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
 
         buf = io.StringIO()
-        writer = csv.writer(buf)
+        writer = safe_csv_writer(buf)
         writer.writerow([
             '社員番号', '姓', '名', '姓（カナ）', '名（カナ）',
             'メールアドレス', 'ロール', '生年月日', '性別',

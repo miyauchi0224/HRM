@@ -15,6 +15,7 @@ from .serializers import (
     QuizQuestionSerializer, QuizChoiceSerializer, QuizAttemptSerializer,
 )
 from apps.common.mixins import SoftDeleteViewSetMixin
+from apps.common.security import validate_upload, safe_filename, ATTACHMENT_EXTENSIONS, VIDEO_EXTENSIONS
 
 
 class LearningCourseViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
@@ -42,14 +43,17 @@ class LearningCourseViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         self._save_attachments(course, self.request)
 
     def _save_attachments(self, course, request):
-        files = request.FILES.getlist('files')
-        for f in files:
+        files = [
+            (f, validate_upload(f, allowed=ATTACHMENT_EXTENSIONS | VIDEO_EXTENSIONS))
+            for f in request.FILES.getlist('files')
+        ]
+        for f, content_type in files:
             CourseAttachment.objects.create(
                 course=course,
                 file=f,
-                file_name=f.name,
+                file_name=safe_filename(f.name),
                 file_size=f.size,
-                content_type=f.content_type or 'application/octet-stream',
+                content_type=content_type,
                 uploaded_by=request.user,
             )
 

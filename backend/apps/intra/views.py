@@ -16,6 +16,8 @@ from .serializers import (
 from apps.notifications.models import Notification
 from apps.accounts.models import User
 from apps.common.mixins import SoftDeleteViewSetMixin
+from apps.common.security import validate_upload
+from rest_framework.exceptions import ValidationError
 
 
 class ArticleViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
@@ -213,7 +215,8 @@ class ArticleViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
 
 
 # ── 画像アップロード（スタンドアロンビュー） ────────────────────────────────
-ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'}
+# SVG はスクリプトを埋め込めるため許可しない
+ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
@@ -235,6 +238,11 @@ def upload_image(request):
 
     if image.size > MAX_IMAGE_SIZE:
         return Response({'error': '10MB以下のファイルを選択してください'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        validate_upload(image, allowed=ALLOWED_IMAGE_EXTENSIONS)
+    except ValidationError:
+        return Response({'error': '画像ファイルとして読み込めません'}, status=status.HTTP_400_BAD_REQUEST)
 
     # ユニークなファイル名で保存
     filename  = f'{_uuid.uuid4().hex}{ext}'

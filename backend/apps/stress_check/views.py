@@ -1,4 +1,5 @@
 import csv
+from apps.common.security import safe_csv_writer
 import io
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -33,7 +34,7 @@ class StressCheckPeriodViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     def template_csv(self, request):
         """質問項目のCSVテンプレートをダウンロード"""
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = safe_csv_writer(output)
         writer.writerow(['order', 'section', 'text', 'reverse'])
         for q in STRESS_CHECK_QUESTIONS:
             writer.writerow([q['order'], q['section'], q['text'], str(q['reverse']).lower()])

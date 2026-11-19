@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from apps.common.security import sanitize_html
 from .models import Article, ArticleRead, ArticleComment
 
 
@@ -76,3 +77,12 @@ class ArticleWriteSerializer(serializers.ModelSerializer):
         model  = Article
         fields = ['id', 'title', 'content', 'format', 'category']
         read_only_fields = ['id']
+
+    def validate(self, attrs):
+        # HTML 形式の本文は保存前に無害化する（script・イベント属性・javascript: URL を除去）
+        fmt = attrs.get('format', getattr(self.instance, 'format', None))
+        if fmt == 'html' and 'content' in attrs:
+            attrs['content'] = sanitize_html(attrs['content'])
+        elif fmt == 'html' and self.instance is not None and 'format' in attrs:
+            attrs['content'] = sanitize_html(self.instance.content)
+        return attrs

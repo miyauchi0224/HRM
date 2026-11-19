@@ -1,4 +1,5 @@
 import csv
+from apps.common.security import safe_csv_writer, set_xlsx_value
 import io
 import os
 import calendar
@@ -64,7 +65,7 @@ class ProjectViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         """タスクのCSVテンプレートをダウンロード"""
         project = self.get_object()
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = safe_csv_writer(output)
         writer.writerow(['タスク名', '担当者社員番号', 'ステータス', '開始予定日(YYYY-MM-DD)', '終了予定日(YYYY-MM-DD)', '進捗率(0-100)', '表示順', '詳細'])
         # 既存タスクをサンプルとして出力
         for task in ProjectTask.objects.filter(project=project).select_related('assignee'):
@@ -123,7 +124,7 @@ class ProjectViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     def projects_template_csv(self, request):
         """プロジェクト一括登録用CSVテンプレートダウンロード"""
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = safe_csv_writer(output)
         writer.writerow(['件番', 'プロジェクト名', '主管理者社員番号', '従管理者社員番号（複数はセミコロン区切り）', '開始日(YYYY-MM-DD)', '終了日(YYYY-MM-DD)', '概要'])
         writer.writerow(['PJ001', 'サンプルプロジェクト', 'EMP001', 'EMP002;EMP003', '2026-04-01', '2026-09-30', 'プロジェクト概要'])
         content = '﻿' + output.getvalue()
@@ -545,7 +546,7 @@ class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
                         h, m = divmod(rec.break_minutes, 60)
                         ws.cell(row=row_num, column=COL_BREAK).value = time(h, m)
                     pj_codes = ' / '.join(pr.project.code for pr in rec.project_records.all())
-                    ws.cell(row=row_num, column=COL_NOTE).value = pj_codes or rec.note or None
+                    set_xlsx_value(ws.cell(row=row_num, column=COL_NOTE), pj_codes or rec.note or None)
                 else:
                     # データがない日はクリア
                     ws.cell(row=row_num, column=COL_CLOCK_IN).value  = None
@@ -587,7 +588,7 @@ class AttendanceViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         weekdays = ['月', '火', '水', '木', '金', '土', '日']
 
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = safe_csv_writer(output)
 
         # ===== ヘッダー（OC作業表と同じ項目） =====
         writer.writerow(['氏名', employee.full_name])

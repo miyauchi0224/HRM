@@ -1,5 +1,4 @@
 from datetime import date, timedelta
-from django.http import FileResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -11,6 +10,7 @@ from .models import Skill
 from .serializers import SkillSerializer
 from apps.notifications.models import Notification
 from apps.common.mixins import SoftDeleteViewSetMixin
+from apps.common.security import validate_upload, attachment_response, IMAGE_EXTENSIONS
 
 
 class SkillViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
@@ -69,6 +69,7 @@ class SkillViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         file = request.FILES.get('file')
         if not file:
             return Response({'error': 'ファイルが指定されていません'}, status=status.HTTP_400_BAD_REQUEST)
+        validate_upload(file, allowed=IMAGE_EXTENSIONS | {'.pdf'}, max_size=10 * 1024 * 1024)
 
         # 既存ファイルがあれば削除
         if skill.certificate_file:
@@ -87,8 +88,4 @@ class SkillViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         skill = self.get_object()
         if not skill.certificate_file:
             return Response({'error': '認定証ファイルが登録されていません'}, status=status.HTTP_404_NOT_FOUND)
-        import os
-        file_name = os.path.basename(skill.certificate_file.name)
-        response = FileResponse(skill.certificate_file.open('rb'))
-        response['Content-Disposition'] = f'attachment; filename="{file_name}"'
-        return response
+        return attachment_response(skill.certificate_file.open('rb'), skill.certificate_file.name)

@@ -3,11 +3,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.exceptions import ValidationError
 
 from .models import ChatRoom, ChatMessage, MessageReadStatus, ChatAttachment
 from .serializers import ChatRoomSerializer, ChatMessageSerializer, ChatAttachmentSerializer
 from apps.accounts.models import User
 from apps.common.mixins import SoftDeleteViewSetMixin
+from apps.common.security import validate_upload, safe_filename
 
 MAX_TOTAL_SIZE = 10 * 1024 * 1024  # 10MB
 
@@ -101,24 +103,26 @@ class ChatMessageViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         return qs.order_by('created_at')
 
     def perform_create(self, serializer):
+        # 添付は保存前に検証する（不正なファイルならメッセージごと 400）
+        files = self._validated_files(self.request)
         msg = serializer.save(sender=self.request.user)
         MessageReadStatus.objects.get_or_create(message=msg, user=self.request.user)
-        self._save_attachments(msg, self.request)
+        self._save_attachments(msg, files)
 
-    def _save_attachments(self, message, request):
+    def _validated_files(self, request):
         files = request.FILES.getlist('files')
-        if not files:
-            return
-        total_size = sum(f.size for f in files)
-        if total_size > MAX_TOTAL_SIZE:
-            return  # フロントエンドで事前チェック済みだが念のため
-        for f in files:
+        if sum(f.size for f in files) > MAX_TOTAL_SIZE:
+            raise ValidationError({'files': '添付ファイルは合計 10MB 以内にしてください'})
+        return [(f, validate_upload(f)) for f in files]
+
+    def _save_attachments(self, message, files):
+        for f, content_type in files:
             ChatAttachment.objects.create(
                 message=message,
                 file=f,
-                file_name=f.name,
+                file_name=safe_filename(f.name),
                 file_size=f.size,
-                content_type=f.content_type or 'application/octet-stream',
+                content_type=content_type,
             )
 
     @action(detail=True, methods=['post'], url_path='read')

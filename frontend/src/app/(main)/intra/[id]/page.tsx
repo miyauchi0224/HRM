@@ -3,6 +3,9 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import DOMPurify from 'dompurify'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useAuthStore } from '@/lib/store'
 import {
   ArrowLeft, Eye, MessageCircle, Pin, CheckCircle,
@@ -344,19 +347,24 @@ function ArticleBody({ content, format }: { content: string; format: 'text' | 'm
     return (
       <div
         className="prose prose-sm max-w-none"
-        dangerouslySetInnerHTML={{ __html: content }}
+        dangerouslySetInnerHTML={{ __html: sanitizeArticleHtml(content) }}
       />
     )
   }
 
   if (format === 'markdown') {
-    // react-markdown の代わりにシンプルな変換（外部パッケージ不要）
-    const html = simpleMarkdownToHtml(content)
+    // react-markdown は生の HTML を描画せず、javascript: などの危険な URL も除去する
     return (
-      <div
-        className="prose prose-sm max-w-none"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+      <article className="prose prose-sm max-w-none">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+          }}
+        >
+          {content}
+        </ReactMarkdown>
+      </article>
     )
   }
 
@@ -367,34 +375,23 @@ function ArticleBody({ content, format }: { content: string; format: 'text' | 'm
 }
 
 /**
- * 最低限の Markdown → HTML 変換（外部ライブラリ不要）
- * 対応: 見出し・太字・斜体・コード・リンク・リスト・水平線・改行
+ * 記事の HTML を無害化する（サーバー側でも保存時に無害化済み。過去データ対策の二重防御）
+ * DOMPurify はブラウザの DOM が必要なため、サーバー描画時は何も出力しない
  */
-function simpleMarkdownToHtml(md: string): string {
-  return md
-    // コードブロック（```...```）
-    .replace(/```([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 rounded p-3 overflow-x-auto text-xs"><code>$1</code></pre>')
-    // インラインコード
-    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 rounded px-1 text-sm font-mono">$1</code>')
-    // 見出し
-    .replace(/^### (.+)$/gm, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>')
-    .replace(/^## (.+)$/gm,  '<h2 class="text-xl font-bold mt-5 mb-2">$1</h2>')
-    .replace(/^# (.+)$/gm,   '<h1 class="text-2xl font-bold mt-6 mb-3">$1</h1>')
-    // 水平線
-    .replace(/^---$/gm, '<hr class="my-4 border-gray-200" />')
-    // 太字・斜体
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g,     '<em>$1</em>')
-    // リンク
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-600 underline" target="_blank" rel="noopener">$1</a>')
-    // リスト（- item）
-    .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
-    // 番号付きリスト（1. item）
-    .replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>')
-    // 改行 → <br>（連続する改行は段落区切り）
-    .replace(/\n\n/g, '</p><p class="mb-3">')
-    .replace(/\n/g, '<br />')
-    // 全体を段落で包む
-    .replace(/^/, '<p class="mb-3">')
-    .replace(/$/, '</p>')
+function sanitizeArticleHtml(html: string): string {
+  if (typeof window === 'undefined' || !DOMPurify.isSupported) return ''
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'iframe', 'object', 'embed'],
+    FORBID_ATTR: ['srcset', 'formaction'],
+  })
+}
+
+if (typeof window !== 'undefined' && DOMPurify.isSupported) {
+  // 別タブで開くリンクには必ず noopener を付ける
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+      node.setAttribute('rel', 'noopener noreferrer')
+    }
+  })
 }

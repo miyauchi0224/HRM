@@ -2,7 +2,8 @@
 
 **作成日**: 2026-04-09  
 **更新日**: 2026-11-19（v1.1: [7章](#7-運用強化機能の詳細設計v11)を追加）  
-**バージョン**: 1.1
+**更新日**: 2026-11-19（v1.2: [8章](#8-インジェクション対策の詳細設計v12)を追加）  
+**バージョン**: 1.2
 
 ---
 
@@ -15,6 +16,7 @@
 5. [ファイル操作フロー](#5-ファイル操作フロー)
 6. [ビジネスロジック詳細](#6-ビジネスロジック詳細)
 7. [運用強化機能の詳細設計（v1.1）](#7-運用強化機能の詳細設計v11)
+8. [インジェクション対策の詳細設計（v1.2）](#8-インジェクション対策の詳細設計v12)
 
 ---
 
@@ -920,6 +922,8 @@ be --> fe : 申請完了レスポンス
 
 > **S3直接アップロードの利点**: 大きなファイルをDjangoサーバーに転送しないため、サーバー負荷が下がりコストも削減できます。
 
+> **v1.2 時点の実装**: 現在は各機能の API に multipart でアップロードし、Django が保存している。受け付ける形式の検証は [8.3](#83-ファイルアップロードダウンロード) を参照。S3 直接アップロードに切り替える場合も、署名付き URL の発行前に同じ拡張子の許可リストで検証し、`Content-Type` はサーバーが決めた値で署名する。
+
 ### 5.2 テンプレートXLSXダウンロードフロー
 
 ```plantuml
@@ -947,7 +951,7 @@ fe --> user : ブラウザでダウンロード開始
 **エクスポート**
 1. `GET /api/v1/expense/account-items/export/` を呼び出す
 2. DjangoがDBから全勘定科目を取得
-3. CSV形式に変換してStreamingResponseで返す
+3. CSV形式に変換してStreamingResponseで返す（数式として実行される値は [8.4](#84-csv--excel-の数式インジェクション) のとおり文字列化する）
 
 **インポート**
 1. CSVファイルを選択してアップロード
@@ -1418,3 +1422,107 @@ apps/scheduler/
 | POST | `/api/v1/pulse/surveys/{id}/publish/` | 人事 | 公開・通知 |
 | POST | `/api/v1/pulse/surveys/{id}/answer/` | 全員 | 回答（期間内・1回のみ） |
 | GET | `/api/v1/pulse/surveys/{id}/results/` | 人事 | 集計 |
+
+---
+
+## 8. インジェクション対策の詳細設計（v1.2）
+
+### 8.1 共通方針
+
+- 対策の処理は `apps/common/security.py` にまとめ、各機能はそれを呼び出す。
+- 「危険なものを除く」拒否リストではなく、「安全と分かっているものだけ通す」許可リスト方式を採る。
+- 利用者が申告した値（ファイルの Content-Type、ファイル名など）は信用せず、サーバー側で決め直す。
+
+| 処理 | 関数・部品 | 使う場所 |
+|---|---|---|
+| HTML の無害化（サーバー） | `sanitize_html()`（nh3） | イントラ記事の保存時 |
+| HTML の無害化（ブラウザ） | DOMPurify | イントラ記事の表示時 |
+| Markdown の表示 | react-markdown + remark-gfm | イントラ記事の表示・作成プレビュー |
+| アップロードの検証 | `validate_upload()`・`safe_filename()` | 各アップロード API |
+| ダウンロード | `attachment_response()` | 各ダウンロード API |
+| メディア配信のヘッダー | `MediaSecurityHeadersMiddleware` | `/media/` 配下 |
+| CSV 出力 | `safe_csv_writer()`・`neutralize_cell()` | 各 CSV 出力 API |
+| Excel 出力 | `set_xlsx_value()` | 勤怠表・給与明細の Excel 出力 |
+
+### 8.2 イントラ記事の HTML 無害化
+
+**保存時（`ArticleWriteSerializer.validate`）**
+- 本文の形式が `html` のとき、保存前に `sanitize_html()` を通す。
+- 形式だけを `html` に変更した場合も、既存の本文を無害化してから保存する。
+- `markdown`・`text` 形式の本文は変更しない（表示側で HTML として描画しないため）。
+
+**許可するもの**
+
+| 区分 | 許可リスト |
+|---|---|
+| タグ | 見出し（h1〜h6）・段落・改行・リスト・表・引用・コード・強調・取り消し線・下線・上付き/下付き・リンク（a）・画像（img）・figure・span・div・hr など |
+| 属性 | 全タグ: `class`・`style`・`title`／a: `href`・`target`／img: `src`・`alt`・`width`・`height`／td・th: `colspan`・`rowspan`・`align`（th は `scope` も）／ol: `start` |
+| style のプロパティ | 色・背景色・文字サイズ・太さ・斜体・文字揃え・装飾・幅・高さ・余白・枠線・縦位置のみ（`url()` や `position` などは除去） |
+| URL のスキーム | `http`・`https`・`mailto` と相対 URL のみ（`javascript:`・`data:` は除去） |
+
+- リンクには `rel="noopener noreferrer"` を自動で付ける。
+- 上記以外（`script`・`iframe`・`svg`・`form`・イベント属性 `on*` など）はすべて除去する。
+
+**表示時（`intra/[id]/page.tsx`）**
+- `html` 形式は DOMPurify で無害化してから表示する（過去データや保存時の漏れに備えた二重防御）。`target="_blank"` のリンクには `rel="noopener noreferrer"` を付ける。
+- `markdown` 形式は react-markdown で表示する。生の HTML タグは描画せず、危険な URL は除去される。
+- `text` 形式は React のテキストとしてそのまま表示する（自動でエスケープされる）。
+
+### 8.3 ファイルアップロード・ダウンロード
+
+**受け付ける形式（拡張子の許可リスト）**
+
+| 用途 | 許可する拡張子 | 上限 |
+|---|---|---|
+| 添付ファイル（稟議・経費・ドキュメント・チャット） | 画像（jpg・jpeg・png・gif・webp・heic）、pdf、txt、csv、md、Office 文書（doc・docx・xls・xlsx・xlsm・ppt・pptx）、OpenDocument（odt・ods・odp）、rtf、zip | ドキュメント 50MB、チャット 合計10MB |
+| 研修の教材 | 添付ファイルの形式 ＋ 動画・音声（mp4・mov・webm・mp3・m4a） | — |
+| 資格の認定証 | 画像（jpg・jpeg・png・gif・webp）、pdf | 10MB |
+| アバター | 画像（jpg・jpeg・png・gif・webp） | 5MB |
+| イントラ記事の画像 | 画像（jpg・jpeg・png・gif・webp） | 10MB |
+
+- HTML・SVG・JavaScript・実行ファイル・拡張子のないファイルは受け付けない（SVG は中にスクリプトを書けるため、v1.2 からイントラ画像でも不可）。
+- 画像は Pillow で開いて中身を検証し、画像として読めない場合や、拡張子と実際の形式が一致しない場合は 400 を返す。
+- 保存する `content_type` は、ブラウザの申告ではなく拡張子からサーバーが決める。
+- 保存するファイル名は `safe_filename()` で整える（パス部分・制御文字・`"<>|:*?` を除去し、200文字以内）。
+
+**ダウンロード**
+- 必ず `Content-Disposition: attachment`（ファイルとして保存）で返す。ファイル名は RFC 6266 形式でエンコードする（日本語・記号を含む名前でもヘッダーが壊れない）。
+- `Content-Type` は保存済みの値ではなく、ファイル名の拡張子から決め直す（v1.1 以前に保存されたデータにも対応するため）。
+- すべてのレスポンスに `X-Content-Type-Options: nosniff` を付ける（Django の SecurityMiddleware）。
+
+**`/media/` 配下の直接配信（`MediaSecurityHeadersMiddleware`）**
+
+| 対象 | 付けるヘッダー |
+|---|---|
+| すべて | `X-Content-Type-Options: nosniff` |
+| PDF 以外 | `Content-Security-Policy: sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'` |
+| PDF | `Content-Security-Policy: script-src 'none'; object-src 'none'`（sandbox を付けるとブラウザの PDF ビューアが動かないため） |
+| 画像・PDF・動画・音声以外 | `Content-Disposition: attachment` |
+
+- 過去にアップロードされた HTML や SVG を直接開いても、スクリプトは実行されない。
+- 本番で S3・CloudFront から配信する場合は、同じヘッダーを CloudFront のレスポンスヘッダーポリシーで付ける。
+
+### 8.4 CSV / Excel の数式インジェクション
+
+**CSV（`safe_csv_writer()`）**
+- 文字列の値が `=`・`+`・`-`・`@`・タブ・改行で始まる場合、先頭に `'` を付けて書き出す。
+- ただし `-5`・`+1.5`・`-1,000` のような数値の表記はそのまま書き出す。数値型の値も変更しない。
+- 対象は CSV を出力するすべての API（勤怠・タスク・プロジェクト・社員・経費・給与・資産・カレンダー・ストレスチェック）。
+
+**Excel（`set_xlsx_value()`）**
+- openpyxl は `=` で始まる文字列を数式として保存するため、そのような値はセルの型を文字列にして保存する（`'` は付けない）。
+- 対象は勤怠表（備考欄）と給与明細の Excel 出力。
+
+> 出力した CSV を一括登録にそのまま読み込み直すと、先頭の `'` も値として取り込まれる。一括登録用のテンプレート（サンプル行）には該当する値を含めない。
+
+### 8.5 テスト
+
+`apps/common/tests_security.py` で次を確認する。
+
+| 区分 | 確認内容 |
+|---|---|
+| HTML 無害化 | `script`・イベント属性・`javascript:`（大文字小文字混在を含む）・`data:`・`iframe`・`svg`・`style` 内の `url()` が除去され、通常の書式は残ること。API 経由の作成・形式変更で無害化されること |
+| アップロード | HTML・SVG・JS・実行ファイル・拡張子なしを拒否すること。偽の画像・拡張子と中身の不一致を拒否すること。Content-Type をサーバーが決めること。ファイル名からパスや改行が除かれること |
+| ダウンロード | `attachment`・サーバーが決めた Content-Type・`nosniff` が付くこと |
+| メディア配信 | HTML に sandbox と attachment が付くこと。画像はブラウザ内で表示できること |
+| 数式対策 | 危険な値に `'` が付き、数値の表記は変わらないこと。Excel で数式にならないこと |

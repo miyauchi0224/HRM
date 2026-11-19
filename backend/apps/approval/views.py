@@ -1,5 +1,4 @@
 from django.utils import timezone
-from django.http import FileResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -17,6 +16,7 @@ from .delegation import can_act_for, delegators_for, notify_approvers
 from apps.notifications.models import Notification
 from apps.accounts.permissions import IsNotCustomer
 from apps.common.mixins import SoftDeleteViewSetMixin
+from apps.common.security import validate_upload, attachment_response, safe_filename
 
 
 class ApprovalTemplateViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
@@ -196,13 +196,14 @@ class ApprovalRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         file = request.FILES.get('file')
         if not file:
             return Response({'error': 'ファイルが指定されていません'}, status=status.HTTP_400_BAD_REQUEST)
+        content_type = validate_upload(file)
 
         attach = ApprovalAttachment.objects.create(
             request      = obj,
             file         = file,
-            file_name    = file.name,
+            file_name    = safe_filename(file.name),
             file_size    = file.size,
-            content_type = file.content_type or 'application/octet-stream',
+            content_type = content_type,
             uploaded_by  = request.user,
         )
         return Response(ApprovalAttachmentSerializer(attach).data, status=status.HTTP_201_CREATED)
@@ -233,9 +234,7 @@ class ApprovalRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             attach = ApprovalAttachment.objects.get(id=attach_id, request=obj)
         except ApprovalAttachment.DoesNotExist:
             return Response({'error': '添付ファイルが見つかりません'}, status=status.HTTP_404_NOT_FOUND)
-        response = FileResponse(attach.file.open('rb'), content_type=attach.content_type)
-        response['Content-Disposition'] = f'attachment; filename="{attach.file_name}"'
-        return response
+        return attachment_response(attach.file.open('rb'), attach.file_name)
 
 
 class ApprovalDelegationViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
