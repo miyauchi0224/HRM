@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.permissions import IsNotCustomer, IsHR
@@ -30,6 +31,13 @@ class IsHROrAdmin(IsHR):
     """IsHR と同義（共通パーミッションクラスを再利用）"""
 
 
+# 本人・管理職が変更できる連絡先項目（それ以外は人事のみ。v1.3）
+CONTACT_FIELDS = {
+    'phone', 'personal_email', 'zip_code', 'address', 'nearest_station',
+    'workplace_name', 'workplace_address', 'workplace_phone', 'commute_route',
+}
+
+
 class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [IsNotCustomer]
 
@@ -39,7 +47,8 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             'emergency_contacts', 'family_members'
         )
         # ?for_project=true の場合はプロジェクト管理者選択用として全社員（顧客含む）を返す
-        if self.request.query_params.get('for_project') == 'true':
+        # 一覧（氏名・部署などの一覧項目）だけに効かせる。詳細・更新・削除には効かない（v1.3）
+        if self.action == 'list' and self.request.query_params.get('for_project') == 'true':
             return qs
         # 通常: 管理職未満は自分のレコードのみ参照可
         if not user.is_manager:
@@ -56,7 +65,26 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('create', 'destroy'):
             return [IsHROrAdmin()]
-        return [IsAuthenticated()]
+        if self.action == 'me':
+            return [IsAuthenticated()]
+        return [IsNotCustomer()]
+
+    def update(self, request, *args, **kwargs):
+        """
+        PUT/PATCH /api/v1/employees/{id}/
+        人事・管理者は全項目、本人と管理職は連絡先項目だけ変更できる（v1.3）
+        """
+        if not request.user.is_hr:
+            instance = self.get_object()
+            if not self._can_edit_employee(request, instance):
+                return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
+            disallowed = sorted(set(request.data.keys()) - CONTACT_FIELDS)
+            if disallowed:
+                return Response(
+                    {'error': f'次の項目は人事担当のみ変更できます: {", ".join(disallowed)}'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         """社員削除 → 本人の全関連データをカスケードソフトデリートして非表示化"""
@@ -329,7 +357,7 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         成功した行はアカウント作成、失敗した行はエラーとして返す。
         仮パスワードは自動生成し、レスポンスに含める（初回ログイン後に変更を促す）。
 
-        対応するロール値: employee / supervisor / manager / hr / accounting / customer / admin
+        対応するロール値: employee / manager / hr / labor / accounting / customer / admin
         対応する性別値:   male / female / other
         対応する雇用形態: full_time / part_time / contract / dispatch
         日付フォーマット: YYYY/MM/DD または YYYY-MM-DD
@@ -393,40 +421,41 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
                 hire_date   = parse_date(row['入社日'])
                 retire_date = parse_date(row.get('退職日'))
 
-                # ─── 作成 ───
-                temp_password = secrets.token_urlsafe(12)
-                user = User.objects.create_user(email=email, password=temp_password, role=role)
+                # ─── 作成（ユーザーと社員情報を1行ずつまとめて登録。途中で失敗したら両方取り消す） ───
+                with transaction.atomic():
+                    temp_password = secrets.token_urlsafe(12)
+                    user = User.objects.create_user(email=email, password=temp_password, role=role)
 
-                Employee.objects.create(
-                    user             = user,
-                    employee_number  = employee_number,
-                    last_name        = row['姓'].strip(),
-                    first_name       = row['名'].strip(),
-                    last_name_kana   = row['姓（カナ）'].strip(),
-                    first_name_kana  = row['名（カナ）'].strip(),
-                    birth_date       = birth_date,
-                    gender           = gender,
-                    hire_date        = hire_date,
-                    retire_date      = retire_date,
-                    employment_type  = emp_type,
-                    department       = row['部署'].strip(),
-                    position         = row['役職'].strip(),
-                    grade            = int(row.get('等級', '1').strip() or '1'),
-                    phone            = row.get('電話番号', '').strip(),
-                    personal_email   = row.get('個人メール', '').strip(),
-                    zip_code         = row.get('郵便番号', '').strip(),
-                    address          = row.get('住所', '').strip(),
-                    nearest_station  = row.get('最寄り駅', '').strip(),
-                    workplace_name   = row.get('勤務先名', '').strip(),
-                    workplace_address= row.get('勤務先住所', '').strip(),
-                    workplace_phone  = row.get('勤務先電話番号', '').strip(),
-                    commute_route    = row.get('通勤経路', '').strip(),
-                    bank_name        = row.get('銀行名', '').strip(),
-                    bank_branch      = row.get('支店名', '').strip(),
-                    bank_account_type= row.get('口座種別', '').strip(),
-                    bank_account_number = row.get('口座番号', '').strip(),
-                    bank_account_holder = row.get('口座名義', '').strip(),
-                )
+                    Employee.objects.create(
+                        user             = user,
+                        employee_number  = employee_number,
+                        last_name        = row['姓'].strip(),
+                        first_name       = row['名'].strip(),
+                        last_name_kana   = row['姓（カナ）'].strip(),
+                        first_name_kana  = row['名（カナ）'].strip(),
+                        birth_date       = birth_date,
+                        gender           = gender,
+                        hire_date        = hire_date,
+                        retire_date      = retire_date,
+                        employment_type  = emp_type,
+                        department       = row['部署'].strip(),
+                        position         = row['役職'].strip(),
+                        grade            = int(row.get('等級', '1').strip() or '1'),
+                        phone            = row.get('電話番号', '').strip(),
+                        personal_email   = row.get('個人メール', '').strip(),
+                        zip_code         = row.get('郵便番号', '').strip(),
+                        address          = row.get('住所', '').strip(),
+                        nearest_station  = row.get('最寄り駅', '').strip(),
+                        workplace_name   = row.get('勤務先名', '').strip(),
+                        workplace_address= row.get('勤務先住所', '').strip(),
+                        workplace_phone  = row.get('勤務先電話番号', '').strip(),
+                        commute_route    = row.get('通勤経路', '').strip(),
+                        bank_name        = row.get('銀行名', '').strip(),
+                        bank_branch      = row.get('支店名', '').strip(),
+                        bank_account_type= row.get('口座種別', '').strip(),
+                        bank_account_number = row.get('口座番号', '').strip(),
+                        bank_account_holder = row.get('口座名義', '').strip(),
+                    )
 
                 created.append({
                     'row':           i,

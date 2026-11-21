@@ -16,3 +16,4 @@ anthropic==0.40.0
 holidays==0.35
 requests==2.33.1
 nh3==0.3.0
+cryptography==43.0.3

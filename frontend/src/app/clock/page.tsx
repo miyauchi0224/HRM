@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, LogIn, LogOut, MapPin, MapPinOff } from 'lucide-react'
 import api from '@/lib/api'
+import { fetchCurrentUser } from '@/lib/auth'
 import { getPunchLocation } from '@/lib/geo'
 
 interface TodayRecord {
@@ -31,7 +32,7 @@ export default function ClockPage() {
   const [message, setMessage]   = useState<string | null>(null)
 
   useEffect(() => {
-    if (!localStorage.getItem('access_token')) router.replace('/login')
+    fetchCurrentUser().then((me) => { if (!me) router.replace('/login') })
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [router])

@@ -3,7 +3,8 @@
 **作成日**: 2026-04-09  
 **更新日**: 2026-11-19（v1.1: [7章](#7-運用強化機能の詳細設計v11)を追加）  
 **更新日**: 2026-11-19（v1.2: [8章](#8-インジェクション対策の詳細設計v12)を追加）  
-**バージョン**: 1.2
+**更新日**: 2026-11-19（v1.3: [9章](#9-認証認可情報保護の詳細設計v13)を追加）  
+**バージョン**: 1.3
 
 ---
 
@@ -17,6 +18,7 @@
 6. [ビジネスロジック詳細](#6-ビジネスロジック詳細)
 7. [運用強化機能の詳細設計（v1.1）](#7-運用強化機能の詳細設計v11)
 8. [インジェクション対策の詳細設計（v1.2）](#8-インジェクション対策の詳細設計v12)
+9. [認証・認可・情報保護の詳細設計（v1.3）](#9-認証認可情報保護の詳細設計v13)
 
 ---
 
@@ -355,7 +357,7 @@ user ||--o{ notification
 ### 2.1 共通仕様
 
 - **ベースURL**: `/api/v1/`
-- **認証**: `Authorization: Bearer <JWT_ACCESS_TOKEN>`
+- **認証**: HttpOnly Cookie（`hrm_access`）に入った JWT。ブラウザ以外のクライアントは `Authorization: Bearer <JWT_ACCESS_TOKEN>` も使える。Cookie で認証する場合、POST・PUT・PATCH・DELETE には `X-CSRFToken` ヘッダーが必要（[9.2](#92-ログイン状態の保持httponly-cookie--csrf)）
 - **Content-Type**: `application/json`（ファイルアップロードは `multipart/form-data`）
 - **ページネーション**: `?page=1&page_size=20`
 - **日時フォーマット**: ISO 8601（`2026-04-09T09:00:00+09:00`）
@@ -869,6 +871,8 @@ else MFA設定済みの場合
 end
 @enduml
 ```
+
+> **v1.3 時点の実装**: Cognito ではなく Django（SimpleJWT）でトークンを発行し、HttpOnly Cookie に保存する。MFA は未実装。詳細は [9.2](#92-ログイン状態の保持httponly-cookie--csrf)。
 
 ### 4.2 API認証フロー（リクエストごと）
 
@@ -1526,3 +1530,141 @@ apps/scheduler/
 | ダウンロード | `attachment`・サーバーが決めた Content-Type・`nosniff` が付くこと |
 | メディア配信 | HTML に sandbox と attachment が付くこと。画像はブラウザ内で表示できること |
 | 数式対策 | 危険な値に `'` が付き、数値の表記は変わらないこと。Excel で数式にならないこと |
+
+---
+
+## 9. 認証・認可・情報保護の詳細設計（v1.3）
+
+### 9.1 アクセス制御の修正
+
+**社員 API（`/api/v1/employees/`）**
+
+| 操作 | 社員 | 管理職 | 人事・管理者 |
+|---|---|---|---|
+| 一覧 | 自分のみ（`?for_project=true` のときは全社員の氏名・部署などの一覧項目だけ） | 全員 | 全員 |
+| 詳細 | 自分のみ | 全員 | 全員 |
+| 更新（PATCH/PUT） | 自分の連絡先項目のみ | 全員の連絡先項目のみ | 全項目 |
+
+- **連絡先項目**: `phone`・`personal_email`・`zip_code`・`address`・`nearest_station`・`workplace_name`・`workplace_address`・`workplace_phone`・`commute_route`
+- 連絡先項目以外を送った場合は 403 を返す（黙って無視しない）。
+- `?for_project=true` は `list` だけに効く。詳細・更新・削除には効かない。
+
+**その他**
+
+| 対象 | 修正後の権限 |
+|---|---|
+| 社員別手当（`/api/v1/salary/employee-allowances/`） | 参照: 本人（経理・人事・管理者は全員分）。登録・変更・削除: 経理・人事・管理者 |
+| イントラ記事（`/api/v1/intra/articles/`） | 変更・削除: 作者と管理職以上。作者（管理職未満）が `pending`・`approved` の記事を変更したら `draft` に戻し、再申請を必要とする |
+| ドキュメント（`/api/v1/documents/`） | 登録・変更・削除: 人事 |
+| コンプライアンス項目（`/api/v1/compliance/checklists/`） | 参照・進捗の記録: 全員（顧客を除く）。項目の登録・変更・削除: 人事 |
+| 資産カテゴリ（`/api/v1/assets/categories/`） | 登録・変更・削除: 人事 |
+
+### 9.2 ログイン状態の保持（HttpOnly Cookie + CSRF）
+
+**Cookie**
+
+| 名前 | 中身 | 属性 |
+|---|---|---|
+| `hrm_access` | アクセストークン（1時間） | HttpOnly、SameSite=Lax、Path=`/`、本番は Secure |
+| `hrm_refresh` | リフレッシュトークン（30日） | HttpOnly、SameSite=Lax、Path=`/api/v1/auth/`、本番は Secure |
+| `csrftoken` | CSRF トークン | SameSite=Lax、本番は Secure（JavaScript から読める必要はない） |
+
+- Cookie のドメインは環境変数 `AUTH_COOKIE_DOMAIN`（既定は未指定＝API のホストのみ）。
+- フロントエンドと API は同じサイトで運用する（SameSite=Lax のため。ローカルは `localhost:3000` と `localhost:8000` で同じサイト扱い）。
+
+**API**
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| GET | `/api/v1/auth/csrf/` | CSRF トークンを発行（本文 `{"csrfToken": "..."}` と `csrftoken` Cookie） |
+| POST | `/api/v1/auth/login/` | ログイン。成功時は2つの Cookie を設定し、本文にはユーザー情報だけを返す（トークンは返さない） |
+| POST | `/api/v1/auth/refresh/` | `hrm_refresh` Cookie からトークンを再発行し、Cookie を更新（リフレッシュトークンは毎回入れ替え、古いものは無効化） |
+| POST | `/api/v1/auth/logout/` | リフレッシュトークンを無効化し、Cookie を削除 |
+| POST | `/api/v1/auth/password/change/` | パスワード変更。そのユーザーの全リフレッシュトークンを無効化し、操作した端末には新しい Cookie を発行 |
+
+**認証クラス（`CookieJWTAuthentication`）**
+1. `Authorization: Bearer` ヘッダーがあれば、それで認証する（CSRF 検証なし。ブラウザ以外のクライアント用）。
+2. なければ `hrm_access` Cookie で認証する。この場合、POST・PUT・PATCH・DELETE は Django の CSRF 検証を行う（`X-CSRFToken` ヘッダーと `csrftoken` Cookie の照合、Origin の確認）。
+3. `CSRF_TRUSTED_ORIGINS` には `CORS_ALLOWED_ORIGINS` と同じフロントエンドの URL を設定する。
+
+**フロントエンド（`lib/api.ts`）**
+- すべてのリクエストを `withCredentials: true` で送る。トークンは JavaScript では扱わない。
+- POST・PUT・PATCH・DELETE の前に、メモリにある CSRF トークンを `X-CSRFToken` ヘッダーに付ける（なければ `/auth/csrf/` で取得）。CSRF エラー（403）になったら、取り直して1回だけ再送する。
+- 401 になったら `/auth/refresh/` を1回だけ呼んで再送する。失敗したらログイン画面へ移動する。
+- ログイン済みかどうかは `/auth/me/` の結果で判断する（`localStorage` は使わない）。
+
+### 9.3 ログイン試行の制限
+
+| 項目 | 内容 |
+|---|---|
+| IP ごとの制限 | `/auth/login/` は同じ IP から 1分間に `LOGIN_RATE`（既定 `10/min`）回まで。超えたら 429 |
+| アカウントロック | 同じアカウントで `LOGIN_MAX_FAILURES`（既定5）回続けて失敗したら、`LOGIN_LOCK_MINUTES`（既定15）分間ロック。ロック中は正しいパスワードでもログインできない |
+| 解除 | ロック時間が過ぎれば再びログインできる。ログインに成功したら失敗回数を0に戻す。システム管理者は管理サイト（ユーザー一覧の「ログインのロックを解除する」）で解除できる |
+| 記録先 | IP ごとの回数は Django のキャッシュに記録する。本番で複数台構成にする場合は Redis などの共有キャッシュを設定する |
+| 追加カラム | User: `failed_login_count`（int）、`locked_until`（datetime, NULL可） |
+| 応答 | パスワード誤りとアカウントなしは同じメッセージ。ロック中は「一定時間ロックされています」と返す |
+
+### 9.4 秘密情報の暗号化
+
+- `EncryptedTextField`（`apps/common/fields.py`）を使い、保存時に Fernet（AES-128-CBC + HMAC-SHA256）で暗号化し、読み込み時に復号する。暗号文には `enc:` の接頭辞を付ける。
+- 鍵は環境変数 `FIELD_ENCRYPTION_KEY`（Fernet 形式）。未設定の場合は `DJANGO_SECRET_KEY` から導出する（開発用。本番では必ず設定する）。
+- 対象: `User.anthropic_api_key`・`User.openai_api_key`・`User.personal_webhook_url`・`WebhookEndpoint.url`・`UserCalendarToken.access_token`・`UserCalendarToken.refresh_token`
+- 移行: マイグレーションで既存の平文を暗号化する。接頭辞のない値は平文として読む（移行途中でも動く）。
+- 暗号化したカラムは検索・並び替えに使わない。
+
+### 9.5 カレンダー連携（OAuth）の state 検証
+
+- 開始時（`oauth/{ms|google}/start/`）に、ユーザー ID・プロバイダー・乱数を Django の署名機能で署名した `state` を作り、認可 URL に付ける。
+- 戻り時（`oauth/{ms|google}/callback/`）に `state` の署名・有効期限（10分）・ユーザー ID・プロバイダーを検証し、一致しなければ 400 を返す。
+- 戻り時の応答は JSON ではなくフロントエンドの画面（`/?calendar=connected` または `?calendar=error`）へのリダイレクトにする。
+
+### 9.6 アップロードファイルの配信
+
+- `/media/` は Django の `ProtectedMediaView` で配信し、ログインしている人だけに返す（未ログインは 401）。顧客ロールはイントラ記事の画像（`intra/` 配下）だけ取得でき、それ以外は 403。
+- 画像（`<img>`）も Cookie で認証されるため、画面の表示は変わらない。
+- 個別の閲覧権限（他人の領収書など）は、各機能のダウンロード API で確認する。
+- 本番で S3 を使う場合は非公開バケットにし、ダウンロード API が期限付き URL（5分）を発行する。
+
+### 9.7 セキュリティヘッダー・本番設定
+
+**バックエンド（`DEBUG=False` のとき有効）**
+
+| 設定 | 値 |
+|---|---|
+| `SECURE_SSL_REDIRECT` | `True`（環境変数 `SECURE_SSL_REDIRECT` で無効化可。ロードバランサーで HTTPS 化する場合） |
+| `SECURE_PROXY_SSL_HEADER` | `('HTTP_X_FORWARDED_PROTO', 'https')` |
+| `SECURE_HSTS_SECONDS` | 31536000（1年）、サブドメインを含む |
+| `SESSION_COOKIE_SECURE`・`CSRF_COOKIE_SECURE`・認証 Cookie の Secure | `True` |
+| `SECURE_REFERRER_POLICY` | `same-origin` |
+| `X_FRAME_OPTIONS` | `DENY` |
+| API ドキュメント（`/api/schema/`・`/api/docs/`） | 管理者（`is_staff`）のみ |
+
+**フロントエンド（`next.config.ts` で全画面に付与）**
+
+| ヘッダー | 値 |
+|---|---|
+| `Content-Security-Policy` | `default-src 'self'`、`script-src 'self' 'unsafe-inline'`（開発時のみ `'unsafe-eval'` も）、`style-src 'self' 'unsafe-inline'`、`img-src 'self' data: blob: https:`、`connect-src 'self'` と API の URL（開発時は `ws:` も）、`frame-src 'self' blob:` と API の URL、`object-src 'none'`、`base-uri 'self'`、`form-action 'self'`、`frame-ancestors 'none'` |
+| `X-Frame-Options` | `DENY` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `geolocation=(self), camera=(), microphone=(), payment=()` |
+
+> `script-src` の `'unsafe-inline'` は Next.js が出力するインラインスクリプトのため。nonce 方式への移行は今後の課題とする。
+
+### 9.8 エラー情報の扱い
+
+- AI 機能・カレンダー連携で外部 API の呼び出しに失敗した場合、画面には「AI生成に失敗しました」などの定型文だけを返し、例外の内容は `logger.exception` でサーバーのログに残す。
+- CSV・Excel 一括登録の行ごとのエラーは、入力の誤りを直すために必要なので従来どおり返す。
+
+### 9.9 テスト
+
+`apps/accounts/tests_security.py`・`apps/common/tests_security_v13.py` で次を確認する。
+
+| 区分 | 確認内容 |
+|---|---|
+| Cookie 認証 | ログインで HttpOnly Cookie が設定され、本文にトークンがないこと。Cookie で API を呼べること。CSRF トークンなしの POST が 403 になること。リフレッシュ・ログアウト・パスワード変更の動作 |
+| ログイン制限 | 5回失敗でロックされ、正しいパスワードでも入れないこと。成功で回数が戻ること |
+| 認可 | 上記 9.1 の各ケースで 403・404 になること、許可された操作は成功すること |
+| 暗号化 | DB には暗号文が入り、モデルからは平文で読めること。平文の既存データも読めること |
+| OAuth | 不正・期限切れ・他人の state を拒否すること |
+| メディア配信 | ログインなしで 401 になること |

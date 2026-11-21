@@ -59,6 +59,12 @@ class EmployeeAllowanceViewSet(viewsets.ModelViewSet):
     serializer_class   = EmployeeAllowanceSerializer
     permission_classes = [IsNotCustomer]
 
+    def get_permissions(self):
+        # 登録・変更・削除は経理・人事・管理者のみ（v1.3。本人が自分の手当を増やせないように）
+        if self.action not in ('list', 'retrieve'):
+            return [IsAccounting()]
+        return [IsNotCustomer()]
+
     def get_queryset(self):
         user = self.request.user
         if user.is_accounting:  # 経理・人事・管理者は全員分を参照可

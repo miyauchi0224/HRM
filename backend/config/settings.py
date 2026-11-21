@@ -128,8 +128,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ── REST Framework ──────────────────────────────────────────────
 REST_FRAMEWORK = {
+    # HttpOnly Cookie の JWT で認証（Bearer ヘッダーも可）。Cookie 利用時は CSRF を検証する
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'apps.accounts.authentication.CookieJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -137,6 +138,9 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_PAGINATION_CLASS': 'config.pagination.StandardPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_THROTTLE_RATES': {
+        'login': config('LOGIN_RATE', default='10/min'),
+    },
 }
 
 # ── JWT 設定 ─────────────────────────────────────────────────────
@@ -150,6 +154,35 @@ SIMPLE_JWT = {
 # ── CORS ─────────────────────────────────────────────────────────
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000', cast=Csv())
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default=','.join(CORS_ALLOWED_ORIGINS), cast=Csv())
+
+# ── 認証 Cookie・ログイン制限（v1.3） ─────────────────────────────
+AUTH_COOKIE_ACCESS       = 'hrm_access'
+AUTH_COOKIE_REFRESH      = 'hrm_refresh'
+AUTH_COOKIE_REFRESH_PATH = '/api/v1/auth/'
+AUTH_COOKIE_SECURE       = config('AUTH_COOKIE_SECURE', default=not DEBUG, cast=bool)
+AUTH_COOKIE_SAMESITE     = 'Lax'
+AUTH_COOKIE_DOMAIN       = config('AUTH_COOKIE_DOMAIN', default='')
+CSRF_COOKIE_SAMESITE     = 'Lax'
+CSRF_COOKIE_SECURE       = AUTH_COOKIE_SECURE
+CSRF_COOKIE_DOMAIN       = AUTH_COOKIE_DOMAIN or None
+SESSION_COOKIE_SECURE    = AUTH_COOKIE_SECURE
+LOGIN_MAX_FAILURES       = config('LOGIN_MAX_FAILURES', default=5, cast=int)
+LOGIN_LOCK_MINUTES       = config('LOGIN_LOCK_MINUTES', default=15, cast=int)
+
+# 外部サービスの認証情報を暗号化する鍵（Fernet 形式）。未設定なら SECRET_KEY から導出（開発用）
+FIELD_ENCRYPTION_KEY     = config('FIELD_ENCRYPTION_KEY', default='')
+
+# ── 本番用のセキュリティ設定（DEBUG=False のとき有効） ────────────────
+X_FRAME_OPTIONS        = 'DENY'
+SECURE_REFERRER_POLICY = 'same-origin'
+if not DEBUG:
+    SECURE_SSL_REDIRECT            = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
+    SECURE_PROXY_SSL_HEADER        = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_HSTS_SECONDS            = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    # ヘルスチェックはロードバランサーから HTTP で来るため HTTPS へのリダイレクト対象外
+    SECURE_REDIRECT_EXEMPT         = [r'^api/v1/health/$']
 
 # ── AWS ──────────────────────────────────────────────────────────
 AWS_REGION = config('AWS_REGION', default='ap-northeast-1')
@@ -163,6 +196,11 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'HRM API',
     'DESCRIPTION': '人事管理システム API',
     'VERSION': '1.0.0',
+    # 本番では API ドキュメントを管理者（is_staff）だけに公開する
+    'SERVE_PERMISSIONS': (
+        ['rest_framework.permissions.AllowAny'] if DEBUG
+        else ['rest_framework.permissions.IsAdminUser']
+    ),
 }
 
 # ── OAuth 設定（Microsoft / Google） ──────────────────────────────

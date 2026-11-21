@@ -1,43 +1,38 @@
-import api from './api'
+import api, { fetchCsrfToken } from './api'
 
-export interface LoginResponse {
-  access:  string
-  refresh: string
-  user: {
-    id:         string
-    email:      string
-    role:       string
-    full_name:  string
-  }
+export interface LoginUser {
+  id:         string
+  email:      string
+  role:       string
+  full_name:  string
 }
 
+export interface LoginResponse {
+  user: LoginUser
+}
+
+/** ログイン。トークンはサーバーが HttpOnly Cookie に保存する（本文には含まれない） */
 export async function login(email: string, password: string): Promise<LoginResponse> {
   const { data } = await api.post<LoginResponse>('/api/v1/auth/login/', { email, password })
-  console.log('[Login] Response keys:', Object.keys(data))
-  console.log('[Login] access token exists:', !!data.access)
-  console.log('[Login] refresh token exists:', !!data.refresh)
-  localStorage.setItem('access_token',  data.access)
-  localStorage.setItem('refresh_token', data.refresh)
-  console.log('[Login] Stored access_token:', localStorage.getItem('access_token')?.slice(0, 20) + '...')
+  // ログインで CSRF トークンが入れ替わるため取り直す
+  await fetchCsrfToken(true)
   return data
 }
 
 export async function logout() {
-  const refresh = localStorage.getItem('refresh_token')
   try {
-    await api.post('/api/v1/auth/logout/', { refresh_token: refresh })
+    await api.post('/api/v1/auth/logout/')
   } finally {
-    localStorage.clear()
     window.location.href = '/login'
   }
 }
 
-export function getStoredUser() {
-  if (typeof window === 'undefined') return null
-  const token = localStorage.getItem('access_token')
-  if (!token) return null
+/** ログイン済みならユーザー情報、未ログインなら null（ログイン画面へは移動しない） */
+export async function fetchCurrentUser() {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
-    return payload
-  } catch { return null }
+    const { data } = await api.get('/api/v1/auth/me/', { skipAuthRedirect: true })
+    return data
+  } catch {
+    return null
+  }
 }

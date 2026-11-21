@@ -17,6 +17,12 @@ from apps.common.mixins import SoftDeleteViewSetMixin
 
 
 class AssetCategoryViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
+    def get_permissions(self):
+        # 登録・変更・削除は人事のみ（v1.3）
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsHR()]
+        return [IsNotCustomer()]
+
     queryset = AssetCategory.objects.all()
     serializer_class = AssetCategorySerializer
     permission_classes = [IsNotCustomer]

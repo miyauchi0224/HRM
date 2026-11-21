@@ -17,7 +17,7 @@ from apps.notifications.models import Notification
 from apps.accounts.models import User
 from apps.common.mixins import SoftDeleteViewSetMixin
 from apps.common.security import validate_upload
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError, PermissionDenied
 
 
 class ArticleViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
@@ -56,6 +56,27 @@ class ArticleViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user.employee)
+
+    def _check_can_modify(self, article):
+        """変更・削除は作者と管理職以上のみ（v1.3）"""
+        user = self.request.user
+        if article.author.user != user and not user.is_manager:
+            raise PermissionDenied('この記事を変更する権限がありません')
+
+    def perform_update(self, serializer):
+        article = serializer.instance
+        self._check_can_modify(article)
+        extra = {}
+        # 管理職未満の作者が承認待ち・公開中の記事を変更したら下書きに戻す（承認の迂回を防ぐ）
+        if not self.request.user.is_manager and article.status in (
+            Article.Status.PENDING, Article.Status.APPROVED,
+        ):
+            extra = {'status': Article.Status.DRAFT, 'approver': None, 'is_pinned': False}
+        serializer.save(**extra)
+
+    def destroy(self, request, *args, **kwargs):
+        self._check_can_modify(self.get_object())
+        return super().destroy(request, *args, **kwargs)
 
     def retrieve(self, request, *args, **kwargs):
         """記事詳細取得 — 公開済みなら既読を自動登録"""

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { login } from '@/lib/auth'
+import { login, fetchCurrentUser } from '@/lib/auth'
 import { useAuthStore } from '@/lib/store'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
@@ -21,7 +21,6 @@ export default function LoginForm() {
   const setUser = useAuthStore((s) => s.setUser)
 
   const [error, setError]           = useState('')
-  const [debugError, setDebugError] = useState('')
   const [agreed, setAgreed]         = useState(false)
   const [tosError, setTosError]     = useState(false)
   const [showTos, setShowTos]       = useState(false)
@@ -31,14 +30,8 @@ export default function LoginForm() {
   })
 
   useEffect(() => {
-    const dbg = localStorage.getItem('debug_last_error')
-    if (dbg) {
-      setDebugError(dbg)
-      localStorage.removeItem('debug_last_error')
-    }
-    if (localStorage.getItem('access_token')) {
-      router.replace('/')
-    }
+    // すでにログインしていればダッシュボードへ
+    fetchCurrentUser().then((me) => { if (me) router.replace('/') })
   }, [])
 
   const onSubmit = async (data: FormData) => {
@@ -52,8 +45,14 @@ export default function LoginForm() {
       const res = await login(data.email, data.password)
       setUser(res.user)
       router.push('/')
-    } catch {
-      setError('メールアドレスまたはパスワードが正しくありません')
+    } catch (e: unknown) {
+      const res = (e as { response?: { status?: number; data?: { detail?: string } } }).response
+      if (res?.status === 403 || res?.status === 429) {
+        // アカウントのロック・試行回数の制限
+        setError(res.data?.detail ?? 'しばらくしてから再度お試しください')
+      } else {
+        setError('メールアドレスまたはパスワードが正しくありません')
+      }
     }
   }
 
@@ -66,12 +65,6 @@ export default function LoginForm() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
             {error}
-          </div>
-        )}
-        {debugError && (
-          <div className="bg-yellow-50 border border-yellow-300 text-yellow-800 px-4 py-3 rounded-lg mb-4 text-xs font-mono break-all">
-            <p className="font-bold mb-1">デバッグ情報</p>
-            {debugError}
           </div>
         )}
 

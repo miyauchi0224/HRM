@@ -1,5 +1,7 @@
 import uuid
 from django.db import models
+
+from apps.common.fields import EncryptedTextField
 from django.conf import settings
 from apps.common.models import SoftDeleteModel
 
@@ -13,8 +15,8 @@ class UserCalendarToken(SoftDeleteModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='calendar_tokens')
     provider = models.CharField(max_length=20, choices=Provider.choices, verbose_name='プロバイダー')
-    access_token = models.TextField(verbose_name='アクセストークン')
-    refresh_token = models.TextField(blank=True, verbose_name='リフレッシュトークン')
+    access_token = EncryptedTextField(verbose_name='アクセストークン')  # 暗号化して保存（v1.3）
+    refresh_token = EncryptedTextField(blank=True, verbose_name='リフレッシュトークン')
     expires_at = models.DateTimeField(null=True, blank=True, verbose_name='有効期限')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

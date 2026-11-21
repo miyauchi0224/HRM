@@ -5,6 +5,7 @@ anthropic SDK 0.40 には output_config / fallbacks の引数がないため ext
 応答は SDK の型に頼らず生の JSON から読む（新しいブロック種別が来ても壊れないように）。
 """
 import json
+import logging
 
 import anthropic
 
@@ -40,6 +41,8 @@ SYSTEM_PROMPT = """あなたは上司と部下の1on1ミーティングの記録
 - summary: 話した内容と決まったことの要約（300字程度）。メモに書かれていないことは推測で補わない。
 - action_items: 次回までに誰が何をするか。owner は上司なら "manager"、部下なら "member"。メモから読み取れるものだけを挙げる。
 - next_agenda: 次回の1on1で扱うとよい話題を2〜4件。前回のアクションアイテムの進捗確認を含める。"""
+
+logger = logging.getLogger(__name__)
 
 
 class AISummaryError(Exception):
@@ -97,8 +100,9 @@ def summarize_meeting(meeting, previous, user) -> dict:
         body = raw.http_response.json()
     except anthropic.RateLimitError:
         raise AISummaryError('AI の利用が混み合っています。しばらくしてから再度お試しください', 429)
-    except anthropic.APIStatusError as e:
-        raise AISummaryError(f'AI生成に失敗しました: {e.message}', 502)
+    except anthropic.APIStatusError:
+        logger.exception('1on1 の AI 要約に失敗しました')
+        raise AISummaryError('AI生成に失敗しました', 502)
     except anthropic.APIConnectionError:
         raise AISummaryError('AI サービスに接続できませんでした', 502)
 

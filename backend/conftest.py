@@ -274,3 +274,12 @@ def manager_client(api_client, manager_user):
     """管理職として認証済みのAPIクライアント"""
     api_client.force_authenticate(user=manager_user.user)
     return api_client
+
+
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    """ログイン回数制限（throttle）の記録がテスト間で残らないようにする"""
+    from django.core.cache import cache
+    cache.clear()
+    yield
+    cache.clear()

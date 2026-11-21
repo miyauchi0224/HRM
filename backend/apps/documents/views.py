@@ -69,7 +69,8 @@ class DocumentViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         return qs.filter(q)
 
     def get_permissions(self):
-        if self.action in ('create', 'destroy'):
+        # 登録・変更・削除は人事のみ（v1.3）
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [IsHR()]
         return [IsNotCustomer()]
 

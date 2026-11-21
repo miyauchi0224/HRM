@@ -361,6 +361,19 @@ docker compose exec backend pytest
 | `PULSE_MIN_GROUP_SIZE` | `5` | パルスサーベイの集計を表示する最小人数 |
 | `FRONTEND_URL` | `http://localhost:3000` | Slack / Teams 通知に載せる画面 URL の起点 |
 
+### セキュリティの設定
+
+ログイン状態は HttpOnly Cookie に保存し、変更系のリクエストは CSRF トークンで保護しています（[詳細設計書 9章](design_detail.md#9-認証認可情報保護の詳細設計v13)）。
+
+| 変数 | 既定値 | 説明 |
+|---|---|---|
+| `FIELD_ENCRYPTION_KEY` | （`DJANGO_SECRET_KEY` から導出） | API キー・連携トークン・Webhook URL を暗号化する鍵。**本番では必ず設定** |
+| `CSRF_TRUSTED_ORIGINS` | `CORS_ALLOWED_ORIGINS` と同じ | CSRF を許可するフロントエンドの URL |
+| `AUTH_COOKIE_DOMAIN` | （なし） | フロントと API をサブドメインで分ける場合の親ドメイン |
+| `LOGIN_RATE` / `LOGIN_MAX_FAILURES` / `LOGIN_LOCK_MINUTES` | `10/min` / `5` / `15` | ログインの回数制限とアカウントロック |
+
+> フロントエンドと API は同じサイト（例: `hrm.example.com` と `api.hrm.example.com`）で運用してください。別のサイトにすると Cookie が送られません。
+
 ### カレンダー連携設定（オプション）
 
 | 変数 | 説明 |
@@ -382,8 +395,9 @@ docker compose exec backend pytest
 
 | パス | 説明 |
 |---|---|
-| `POST /api/v1/auth/login/` | ログイン（JWT 発行） |
-| `POST /api/v1/auth/refresh/` | トークンリフレッシュ |
+| `GET /api/v1/auth/csrf/` | CSRF トークンの発行 |
+| `POST /api/v1/auth/login/` | ログイン（JWT を HttpOnly Cookie に保存） |
+| `POST /api/v1/auth/refresh/` | トークンリフレッシュ（Cookie を更新） |
 | `GET/POST /api/v1/employees/` | 社員一覧・作成 |
 | `GET /api/v1/employees/org-chart/` | 組織図データ（アバター・等級付き） |
 | `POST /api/v1/attendance/clock-in/` | 出勤打刻 |

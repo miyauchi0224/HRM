@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from apps.accounts.permissions import IsNotCustomer, IsHR
 from django.utils import timezone
 from .models import ComplianceChecklistSection, ComplianceChecklistItem, ComplianceChecklistProgress
 from .serializers import (
@@ -12,7 +13,13 @@ from .serializers import (
 
 
 class ComplianceChecklistViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsNotCustomer]
+
+    def get_permissions(self):
+        # 項目の登録・変更・削除は人事のみ。参照・進捗の記録は顧客以外の全員（v1.3）
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsHR()]
+        return [IsNotCustomer()]
     queryset = ComplianceChecklistSection.objects.filter(is_deleted=False).order_by('order')
 
     def get_serializer_class(self):

@@ -82,7 +82,10 @@ class TestLoginAPI:
             'password': 'TestPass1234!',
         })
         assert res.status_code == status.HTTP_200_OK
-        assert 'access' in res.data
+        # v1.3: トークンは HttpOnly Cookie で返し、本文には含めない
+        assert 'access' not in res.data
+        assert res.data['user']['email'] == emp.user.email
+        assert res.cookies['hrm_access']['httponly']
 
     def test_login_wrong_password(self, api_client):
         emp = EmployeeFactory()

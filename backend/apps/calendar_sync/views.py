@@ -13,9 +13,42 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+import logging
+import secrets
 import requests
+from django.core import signing
 from .models import UserCalendarToken, CalendarEvent
 from .serializers import UserCalendarTokenSerializer
+
+logger = logging.getLogger(__name__)
+
+# ── OAuth の state（CSRF 対策。v1.3） ─────────────────────────────
+OAUTH_STATE_SALT = 'hrm.calendar.oauth-state'
+OAUTH_STATE_MAX_AGE = 600  # 10分
+
+
+def make_oauth_state(user, provider: str) -> str:
+    """ユーザー ID・プロバイダー・乱数を署名した state を作る"""
+    return signing.dumps(
+        {'u': str(user.id), 'p': provider, 'n': secrets.token_urlsafe(16)},
+        salt=OAUTH_STATE_SALT,
+    )
+
+
+def verify_oauth_state(state: str, user, provider: str) -> bool:
+    """署名・有効期限・ユーザー・プロバイダーを検証する"""
+    if not state:
+        return False
+    try:
+        data = signing.loads(state, salt=OAUTH_STATE_SALT, max_age=OAUTH_STATE_MAX_AGE)
+    except signing.BadSignature:  # SignatureExpired も含む
+        return False
+    return data.get('u') == str(user.id) and data.get('p') == provider
+
+
+def frontend_redirect(result: str):
+    """OAuth の戻り先はフロントエンドの画面（結果は ?calendar= で渡す）"""
+    return redirect(f"{settings.FRONTEND_URL.rstrip('/')}/?calendar={result}")
 
 
 class CalendarViewSet(viewsets.ViewSet):
@@ -69,16 +102,20 @@ class CalendarViewSet(viewsets.ViewSet):
             'redirect_uri': redirect_uri,
             'response_type': 'code',
             'scope': scope,
-            'prompt': 'select_account'
+            'prompt': 'select_account',
+            'state': make_oauth_state(request.user, 'ms'),
         }
         return redirect(f'{auth_url}?{urlencode(params)}')
 
     @action(detail=False, methods=['get'], url_path='oauth/ms/callback')
     def oauth_ms_callback(self, request):
         """Microsoft OAuth コールバック"""
+        if not verify_oauth_state(request.query_params.get('state', ''), request.user, 'ms'):
+            return Response({'error': '連携要求が無効または期限切れです。もう一度やり直してください'},
+                            status=status.HTTP_400_BAD_REQUEST)
         code = request.query_params.get('code')
         if not code:
-            return Response({'error': 'Authorization code not provided'}, status=status.HTTP_400_BAD_REQUEST)
+            return frontend_redirect('error')
 
         client_id = settings.MICROSOFT_CLIENT_ID
         client_secret = settings.MICROSOFT_CLIENT_SECRET
@@ -115,9 +152,10 @@ class CalendarViewSet(viewsets.ViewSet):
                 }
             )
 
-            return Response({'message': 'Microsoft カレンダーの同期を有効にしました'}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({'error': f'Token exchange failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            return frontend_redirect('connected')
+        except Exception:
+            logger.exception('Microsoft カレンダーのトークン交換に失敗しました')
+            return frontend_redirect('error')
 
     @action(detail=False, methods=['get'], url_path='oauth/google/start')
     def oauth_google_start(self, request):
@@ -135,15 +173,19 @@ class CalendarViewSet(viewsets.ViewSet):
             'response_type': 'code',
             'scope': scope,
             'access_type': 'offline',
+            'state': make_oauth_state(request.user, 'google'),
         }
         return redirect(f'{auth_url}?{urlencode(params)}')
 
     @action(detail=False, methods=['get'], url_path='oauth/google/callback')
     def oauth_google_callback(self, request):
         """Google OAuth コールバック"""
+        if not verify_oauth_state(request.query_params.get('state', ''), request.user, 'google'):
+            return Response({'error': '連携要求が無効または期限切れです。もう一度やり直してください'},
+                            status=status.HTTP_400_BAD_REQUEST)
         code = request.query_params.get('code')
         if not code:
-            return Response({'error': 'Authorization code not provided'}, status=status.HTTP_400_BAD_REQUEST)
+            return frontend_redirect('error')
 
         client_id = settings.GOOGLE_CLIENT_ID
         client_secret = settings.GOOGLE_CLIENT_SECRET
@@ -179,9 +221,10 @@ class CalendarViewSet(viewsets.ViewSet):
                 }
             )
 
-            return Response({'message': 'Google カレンダーの同期を有効にしました'}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({'error': f'Token exchange failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            return frontend_redirect('connected')
+        except Exception:
+            logger.exception('Google カレンダーのトークン交換に失敗しました')
+            return frontend_redirect('error')
 
     @action(detail=False, methods=['get'])
     def events(self, request):
@@ -231,8 +274,8 @@ class CalendarViewSet(viewsets.ViewSet):
             events.extend(ms_events)
         except UserCalendarToken.DoesNotExist:
             pass
-        except Exception as e:
-            print(f'MS Calendar error: {e}')
+        except Exception:
+            logger.exception('Microsoft カレンダーの予定取得に失敗しました')
 
         # Google カレンダーイベント取得
         try:
@@ -241,8 +284,8 @@ class CalendarViewSet(viewsets.ViewSet):
             events.extend(google_events)
         except UserCalendarToken.DoesNotExist:
             pass
-        except Exception as e:
-            print(f'Google Calendar error: {e}')
+        except Exception:
+            logger.exception('Google カレンダーの予定取得に失敗しました')
 
         return Response({'events': events})
 
@@ -398,8 +441,9 @@ class CalendarViewSet(viewsets.ViewSet):
                 {'message': '予定を追加しました', 'event_id': str(db_event.id)},
                 status=status.HTTP_201_CREATED
             )
-        except Exception as e:
-            return Response({'error': f'予定の追加に失敗しました: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception('カレンダー予定の追加に失敗しました')
+            return Response({'error': '予定の追加に失敗しました'}, status=status.HTTP_400_BAD_REQUEST)
 
     def _create_ms_calendar_event(self, token, title, date_str):
         """Microsoft Graphで予定を追加"""
@@ -495,8 +539,9 @@ class CalendarViewSet(viewsets.ViewSet):
                     pass  # 外部同期未設定でも DB 更新は成功
 
             return Response({'message': '予定を更新しました'}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({'error': f'予定の更新に失敗しました: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception('カレンダー予定の更新に失敗しました')
+            return Response({'error': '予定の更新に失敗しました'}, status=status.HTTP_400_BAD_REQUEST)
 
     def _update_ms_calendar_event(self, token, event_id, title, start, end):
         """Microsoft Graphで予定を更新"""
@@ -577,8 +622,9 @@ class CalendarViewSet(viewsets.ViewSet):
             event.delete()
 
             return Response({'message': '予定を削除しました'}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({'error': f'予定の削除に失敗しました: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception('カレンダー予定の削除に失敗しました')
+            return Response({'error': '予定の削除に失敗しました'}, status=status.HTTP_400_BAD_REQUEST)
 
     def _delete_ms_calendar_event(self, token, event_id):
         """Microsoft Graphで予定を削除"""

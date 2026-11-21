@@ -19,15 +19,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => { setMenuOpen(false) }, [pathname])
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      router.replace('/login')
-      return
-    }
-
-    // ユーザー情報の復元
+    // ログイン状態は HttpOnly Cookie にあるため、/auth/me/ の結果で判断する
     if (!user) {
-      api.get('/api/v1/auth/me/').then(({ data }) => {
+      api.get('/api/v1/auth/me/', { skipAuthRedirect: true }).then(({ data }) => {
         setUser({
           id:         data.id,
           email:      data.email,
@@ -59,7 +53,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           })
         }
       }).catch(() => {
-        // トークン無効 → api.ts の interceptor がログインへリダイレクト
+        // 未ログイン・ログイン期限切れ
+        router.replace('/login')
       })
     }
   }, [])

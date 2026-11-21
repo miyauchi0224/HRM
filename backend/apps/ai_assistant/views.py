@@ -1,3 +1,4 @@
+import logging
 import anthropic
 import json
 from django.conf import settings
@@ -5,6 +6,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from apps.accounts.permissions import IsNotCustomer, IsHR
+
+logger = logging.getLogger(__name__)
 
 
 def get_client(user=None):
@@ -52,8 +55,9 @@ class DraftDailyReportView(APIView):
             )
             draft = message.content[0].text if message.content else ''
             return Response({'draft': draft})
-        except Exception as e:
-            return Response({'error': f'AI生成に失敗しました: {str(e)}'},
+        except Exception:
+            logger.exception('AI生成に失敗しました')
+            return Response({'error': 'AI生成に失敗しました'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -87,8 +91,9 @@ class DraftMBOReportView(APIView):
             )
             draft = message.content[0].text if message.content else ''
             return Response({'draft': draft})
-        except Exception as e:
-            return Response({'error': f'AI生成に失敗しました: {str(e)}'},
+        except Exception:
+            logger.exception('AI生成に失敗しました')
+            return Response({'error': 'AI生成に失敗しました'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -124,8 +129,9 @@ class DraftMBOGoalView(APIView):
             )
             draft = message.content[0].text if message.content else ''
             return Response({'draft': draft})
-        except Exception as e:
-            return Response({'error': f'AI生成に失敗しました: {str(e)}'},
+        except Exception:
+            logger.exception('AI生成に失敗しました')
+            return Response({'error': 'AI生成に失敗しました'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -185,8 +191,9 @@ class HRQueryView(APIView):
             messages = [{'role': 'user', 'content': question}]
             answer = self._run_agent_loop(client, tools, messages, request)
             return Response({'answer': answer})
-        except Exception as e:
-            return Response({'error': f'AI処理に失敗しました: {str(e)}'},
+        except Exception:
+            logger.exception('AI処理に失敗しました')
+            return Response({'error': 'AI処理に失敗しました'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def _run_agent_loop(self, client, tools, messages, request):
@@ -302,8 +309,9 @@ class DraftIntraArticleView(APIView):
                 messages=[{'role': 'user', 'content': prompt}],
             )
             return Response({'draft': msg.content[0].text if msg.content else ''})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception('AI 処理に失敗しました')
+            return Response({'error': 'AI処理に失敗しました'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class DraftJobPostingView(APIView):
@@ -334,8 +342,9 @@ class DraftJobPostingView(APIView):
                 messages=[{'role': 'user', 'content': prompt}],
             )
             return Response({'draft': msg.content[0].text if msg.content else ''})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception('AI 処理に失敗しました')
+            return Response({'error': 'AI処理に失敗しました'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class DraftNextMonthIssueView(APIView):
@@ -361,8 +370,9 @@ class DraftNextMonthIssueView(APIView):
                 messages=[{'role': 'user', 'content': prompt}],
             )
             return Response({'draft': msg.content[0].text if msg.content else ''})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception('AI 処理に失敗しました')
+            return Response({'error': 'AI処理に失敗しました'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class AnalyzeExpenseReceiptView(APIView):
@@ -409,6 +419,7 @@ class AnalyzeExpenseReceiptView(APIView):
             except json.JSONDecodeError:
                 data = {'raw': text}
             return Response(data)
-        except Exception as e:
-            return Response({'error': f'AI解析に失敗しました: {str(e)}'},
+        except Exception:
+            logger.exception('AI解析に失敗しました')
+            return Response({'error': 'AI解析に失敗しました'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)

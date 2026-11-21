@@ -1,5 +1,7 @@
 import uuid
 from django.db import models
+
+from apps.common.fields import EncryptedTextField
 from apps.accounts.models import User
 from apps.common.models import SoftDeleteModel
 
@@ -63,7 +65,7 @@ class WebhookEndpoint(SoftDeleteModel):
     id                 = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name               = models.CharField(max_length=100, verbose_name='名前')
     provider           = models.CharField(max_length=10, choices=Provider.choices)
-    url                = models.CharField(max_length=500, verbose_name='Webhook URL')
+    url                = EncryptedTextField(verbose_name='Webhook URL')  # 暗号化して保存（v1.3）
     notification_types = models.JSONField(default=list, verbose_name='転送する通知種別')
     is_active          = models.BooleanField(default=True)
     created_by         = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
