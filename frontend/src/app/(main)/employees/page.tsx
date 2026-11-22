@@ -751,23 +751,19 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
     }
   }
 
-  // 仮パスワードは後から確認できないため、一覧を CSV で保存できるようにする
+  // 初期パスワードの一覧を CSV で保存できるようにする（社員への案内用）
   const downloadPasswords = () => {
     if (!result) return
     const q = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`
     const lines = [
-      ['社員番号', '氏名', 'メールアドレス', '仮パスワード'].map(q).join(','),
+      ['社員番号', '氏名', 'メールアドレス', '初期パスワード'].map(q).join(','),
       ...result.results.map((r) => [r.employee_number, r.name, r.email, r.temp_password].map(q).join(',')),
     ]
     downloadBlob(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }),
       'employees_temp_passwords.csv')
   }
 
-  const close = () => {
-    if (result && result.created > 0 &&
-        !confirm('仮パスワードは閉じると再表示できません。控えましたか？')) return
-    onClose()
-  }
+  const close = () => onClose()
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -780,6 +776,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
         <div className="p-6 overflow-y-auto space-y-5">
           <div className="text-sm text-gray-600 space-y-1">
             <p>テンプレートの列順で作成した CSV（UTF-8）をアップロードすると、社員とログインアカウントを一括で作成します。</p>
+            <p>初期パスワードは生年月日の 8 桁（例: 1990/04/01 → 19900401）で、初回ログイン時に変更を求めます。</p>
             <p className="text-xs text-gray-400">
               ロール: employee / manager / hr / labor / accounting / customer / admin ・
               性別: male / female / other ・ 雇用形態: full_time / part_time / contract / dispatch ・
@@ -810,7 +807,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
                     <p className="text-xs text-yellow-800">
-                      仮パスワードはこの画面でしか確認できません。保存して各社員に共有してください。
+                      初期パスワードは各社員の生年月日（8桁）です。初回ログイン時にパスワードの変更を求めます。
                     </p>
                     <button onClick={downloadPasswords}
                       className="shrink-0 flex items-center gap-1 text-xs border border-yellow-400 text-yellow-800 hover:bg-yellow-100 px-2 py-1 rounded">
@@ -825,7 +822,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
                           <th className="text-left py-2 px-3 font-medium">社員番号</th>
                           <th className="text-left py-2 px-3 font-medium">氏名</th>
                           <th className="text-left py-2 px-3 font-medium">メールアドレス</th>
-                          <th className="text-left py-2 px-3 font-medium">仮パスワード</th>
+                          <th className="text-left py-2 px-3 font-medium">初期パスワード</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -931,9 +928,10 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
               <p className="text-sm text-gray-500 mb-4">以下の情報を本人に共有してください</p>
               <div className="bg-gray-50 rounded-lg p-4 text-left text-sm space-y-2 mb-6">
                 <p><span className="text-gray-400">メール：</span>{result.email}</p>
-                <p><span className="text-gray-400">仮パスワード：</span>
+                <p><span className="text-gray-400">初期パスワード：</span>
                   <code className="font-mono bg-yellow-100 px-1 rounded">{result.temp_password}</code>
                 </p>
+                <p className="text-xs text-gray-400">生年月日（8桁）。初回ログイン時に変更を求めます。</p>
               </div>
             </>
           ) : (

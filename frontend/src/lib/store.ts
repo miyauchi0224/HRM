@@ -6,6 +6,8 @@ interface User {
   role:       string
   full_name:  string
   department?: string
+  /** 初期パスワード（生年月日）のまま。true の間はパスワード変更画面を出す */
+  must_change_password?: boolean
 }
 
 interface AuthStore {

@@ -21,6 +21,8 @@ from .serializers import (
     EmploymentHistorySerializer, EmploymentOrderSerializer,
 )
 from .history import create_order, snapshot_as_of
+from .csv_import import import_employees_csv
+from apps.accounts.passwords import initial_password_for
 from apps.accounts.models import User
 from apps.common.mixins import SoftDeleteViewSetMixin
 from apps.common.security import validate_upload, IMAGE_EXTENSIONS, safe_csv_writer
@@ -139,9 +141,9 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
 
         d = serializer.validated_data
 
-        # User作成（仮パスワードを発行）
-        import secrets, uuid
-        temp_password = secrets.token_urlsafe(12)
+        # User作成（初期パスワードは生年月日の 8 桁。未登録ならランダム。初回ログイン時に変更を求める）
+        import uuid
+        temp_password = initial_password_for(d.get('birth_date'))
         roles = d.get('roles', [User.Role.EMPLOYEE])
         email = d.get('email', '') or f'customer_{uuid.uuid4().hex[:8]}@noreply.local'
         user = User.objects.create_user(
@@ -149,6 +151,7 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             password=temp_password,
             role=roles[0],
             roles=roles,
+            must_change_password=True,
         )
         # Employee作成
         Employee.objects.create(
@@ -355,7 +358,7 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
 
         CSVフォーマット: テンプレートの列順に従う
         成功した行はアカウント作成、失敗した行はエラーとして返す。
-        仮パスワードは自動生成し、レスポンスに含める（初回ログイン後に変更を促す）。
+        初期パスワードは生年月日の 8 桁（YYYYMMDD）。レスポンスに含め、初回ログイン時に変更を求める。
 
         対応するロール値: employee / manager / hr / labor / accounting / customer / admin
         対応する性別値:   male / female / other
@@ -369,104 +372,11 @@ class EmployeeViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
         if not file:
             return Response({'error': 'ファイルが指定されていません'}, status=status.HTTP_400_BAD_REQUEST)
 
-        decoded = file.read().decode('utf-8-sig')
-        reader  = csv.DictReader(io.StringIO(decoded))
-
-        created = []
-        errors  = []
-
-        valid_roles   = [c[0] for c in User.Role.choices]
-        valid_genders = [c[0] for c in Employee.Gender.choices]
-        valid_emp_types = [c[0] for c in Employee.EmploymentType.choices]
-
-        def parse_date(val):
-            if not val or not val.strip():
-                return None
-            val = val.strip().replace('/', '-')
-            try:
-                return date.fromisoformat(val)
-            except ValueError:
-                raise ValueError(f'日付の形式が正しくありません（例: 1990/04/01）: {val}')
-
-        for i, row in enumerate(reader, start=2):  # 2行目から（1行目はヘッダー）
-            try:
-                # ─── 必須項目チェック ───
-                required = ['社員番号', '姓', '名', '姓（カナ）', '名（カナ）',
-                            'メールアドレス', '生年月日', '性別', '入社日',
-                            '雇用形態', '部署', '役職']
-                for field in required:
-                    if not row.get(field, '').strip():
-                        raise ValueError(f'「{field}」は必須項目です')
-
-                employee_number = row['社員番号'].strip()
-                email           = row['メールアドレス'].strip()
-                role            = row.get('ロール', 'employee').strip() or 'employee'
-                gender          = row['性別'].strip()
-                emp_type        = row['雇用形態'].strip()
-
-                # ─── 値の検証 ───
-                if role not in valid_roles:
-                    raise ValueError(f'ロールの値が無効です（{role}）。使用可能: {", ".join(valid_roles)}')
-                if gender not in valid_genders:
-                    raise ValueError(f'性別の値が無効です（{gender}）。使用可能: male / female / other')
-                if emp_type not in valid_emp_types:
-                    raise ValueError(f'雇用形態の値が無効です（{emp_type}）。使用可能: full_time / part_time / contract / dispatch')
-
-                if User.objects.filter(email=email).exists():
-                    raise ValueError(f'メールアドレスが既に使用されています: {email}')
-                if Employee.objects.filter(employee_number=employee_number).exists():
-                    raise ValueError(f'社員番号が既に使用されています: {employee_number}')
-
-                birth_date  = parse_date(row['生年月日'])
-                hire_date   = parse_date(row['入社日'])
-                retire_date = parse_date(row.get('退職日'))
-
-                # ─── 作成（ユーザーと社員情報を1行ずつまとめて登録。途中で失敗したら両方取り消す） ───
-                with transaction.atomic():
-                    temp_password = secrets.token_urlsafe(12)
-                    user = User.objects.create_user(email=email, password=temp_password, role=role)
-
-                    Employee.objects.create(
-                        user             = user,
-                        employee_number  = employee_number,
-                        last_name        = row['姓'].strip(),
-                        first_name       = row['名'].strip(),
-                        last_name_kana   = row['姓（カナ）'].strip(),
-                        first_name_kana  = row['名（カナ）'].strip(),
-                        birth_date       = birth_date,
-                        gender           = gender,
-                        hire_date        = hire_date,
-                        retire_date      = retire_date,
-                        employment_type  = emp_type,
-                        department       = row['部署'].strip(),
-                        position         = row['役職'].strip(),
-                        grade            = int(row.get('等級', '1').strip() or '1'),
-                        phone            = row.get('電話番号', '').strip(),
-                        personal_email   = row.get('個人メール', '').strip(),
-                        zip_code         = row.get('郵便番号', '').strip(),
-                        address          = row.get('住所', '').strip(),
-                        nearest_station  = row.get('最寄り駅', '').strip(),
-                        workplace_name   = row.get('勤務先名', '').strip(),
-                        workplace_address= row.get('勤務先住所', '').strip(),
-                        workplace_phone  = row.get('勤務先電話番号', '').strip(),
-                        commute_route    = row.get('通勤経路', '').strip(),
-                        bank_name        = row.get('銀行名', '').strip(),
-                        bank_branch      = row.get('支店名', '').strip(),
-                        bank_account_type= row.get('口座種別', '').strip(),
-                        bank_account_number = row.get('口座番号', '').strip(),
-                        bank_account_holder = row.get('口座名義', '').strip(),
-                    )
-
-                created.append({
-                    'row':           i,
-                    'employee_number': employee_number,
-                    'name':          f'{row["姓"]} {row["名"]}',
-                    'email':         email,
-                    'temp_password': temp_password,
-                })
-
-            except Exception as e:
-                errors.append({'row': i, 'error': str(e)})
+        try:
+            decoded = file.read().decode('utf-8-sig')
+        except UnicodeDecodeError:
+            return Response({'error': 'CSV は UTF-8 で保存してください'}, status=status.HTTP_400_BAD_REQUEST)
+        created, errors = import_employees_csv(decoded)
 
         return Response({
             'created': len(created),

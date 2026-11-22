@@ -286,11 +286,37 @@ docker compose exec backend python manage.py migrate
 # 5. スーパーユーザーを作成（初回のみ）
 docker compose exec backend python manage.py createsuperuser
 
-# 6. ブラウザでアクセス
+# 6. サンプルデータを投入（任意。デモ・動作確認用）
+docker compose exec backend python manage.py load_sample_data
+#   入れ直す場合: load_sample_data --reset
+
+# 7. ブラウザでアクセス
 #   フロントエンド: http://localhost:3000
 #   API ドキュメント: http://localhost:8000/api/docs/
 #   管理サイト:      http://localhost:8000/admin/
 ```
+
+### サンプルデータと初期パスワード
+
+`load_sample_data` は `backend/template/employees_sample_data.csv` の社員 20 名と、次のデータを作ります。
+
+- 上司・部下の関係、勤務ルール・給与等級・手当・勘定科目のマスタ
+- 有給の付与と取得、プロジェクトとタスク、直近 3 か月の勤怠
+- 給与明細（先々月は確定済、先月は計算中）、MBO の目標と月報、TODO・日報、経費、イントラ記事、資格
+
+ログインの**初期パスワードは各社員の生年月日 8 桁**（例: 1990/04/01 → `19900401`）です。
+画面からの社員登録と CSV 一括登録も同じルールで、初回ログイン時にパスワードの変更を求めます（変更するまで他の画面は操作できません）。
+
+| 社員番号 | ロール | メールアドレス | 初期パスワード |
+|---|---|---|---|
+| EMP0001 | システム管理者 | aoki.makoto@example.com | 19750512 |
+| EMP0002 | 人事 | ishikawa.naomi@example.com | 19800903 |
+| EMP0004 | 労務 | eguchi.yumi@example.com | 19851108 |
+| EMP0005 | 経理 | ono.osamu@example.com | 19780715 |
+| EMP0007 | 管理職 | kimura.daisuke@example.com | 19791201 |
+| EMP0010 | 社員 | sasaki.sho@example.com | 19980123 |
+
+全員分の一覧は、コマンドの実行結果に表示されます。
 
 ### 開発時の便利コマンド
 

@@ -33,7 +33,11 @@ class TestEmployeeImport:
         assert res.status_code == 200
         assert res.data['created'] == 2 and res.data['errors'] == 0
         assert User.objects.get(email='t1@example.com').is_manager
-        assert all(len(r['temp_password']) >= 12 for r in res.data['results'])
+        # 初期パスワードは生年月日の 8 桁。初回ログイン時に変更が必要
+        assert all(r['temp_password'] == '19900401' for r in res.data['results'])
+        user = User.objects.get(email='t2@example.com')
+        assert user.check_password('19900401')
+        assert user.must_change_password
 
     def test_failed_row_leaves_no_orphan_user(self, hr_client):
         """社員情報の作成で失敗したら、ユーザーも作られない（再取り込みできる）"""

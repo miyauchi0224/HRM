@@ -64,6 +64,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     locked_until       = models.DateTimeField(null=True, blank=True, verbose_name='ロック解除日時')
     # これより前に発行されたトークンは無効（パスワード変更で全端末をログアウトさせる）
     password_changed_at = models.DateTimeField(null=True, blank=True, verbose_name='パスワード変更日時')
+    # 初期パスワード（生年月日など）のままのアカウント。ログイン後にパスワード変更を求める
+    must_change_password = models.BooleanField(default=False, verbose_name='パスワード変更が必要')
     is_active          = models.BooleanField(default=True)
     is_staff           = models.BooleanField(default=False)
     created_at         = models.DateTimeField(auto_now_add=True)

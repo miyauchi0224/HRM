@@ -5,6 +5,7 @@ export interface LoginUser {
   email:      string
   role:       string
   full_name:  string
+  must_change_password?: boolean
 }
 
 export interface LoginResponse {

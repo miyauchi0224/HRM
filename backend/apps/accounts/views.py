@@ -31,6 +31,7 @@ def _user_payload(user):
         'email':     user.email,
         'role':      user.role,
         'full_name': user.employee.full_name if hasattr(user, 'employee') else user.email,
+        'must_change_password': user.must_change_password,
     }
 
 
@@ -132,6 +133,7 @@ def me_view(request):
     """GET /api/v1/auth/me/ - ログイン中ユーザー情報取得"""
     serializer = UserSerializer(request.user)
     data = serializer.data
+    data['must_change_password'] = request.user.must_change_password
     if hasattr(request.user, 'employee'):
         emp = request.user.employee
         data['full_name']  = emp.full_name
@@ -202,6 +204,7 @@ def change_password_view(request):
     if serializer.is_valid():
         user = request.user
         user.set_password(serializer.validated_data['new_password'])
+        user.must_change_password = False
         user.save()
         # 他の端末のログインをすべて無効にし、この端末には新しいトークンを発行する
         revoke_all_refresh_tokens(user)

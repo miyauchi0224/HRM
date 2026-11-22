@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import Sidebar from '@/components/layout/Sidebar'
 import { useAuthStore } from '@/lib/store'
 import api from '@/lib/api'
+import InitialPasswordChangeModal from '@/components/InitialPasswordChangeModal'
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const { user, setUser } = useAuthStore()
@@ -28,6 +29,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           role:       data.role,
           full_name:  data.full_name ?? data.email,
           department: data.department,
+          must_change_password: data.must_change_password,
         })
 
         // ユーザー情報取得後、よく使う共通データをバックグラウンドでプリフェッチ
@@ -90,6 +92,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           {children}
         </main>
       </div>
+
+      {/* 初回ログイン（初期パスワードのまま）の場合は、変更するまで操作できない */}
+      {user?.must_change_password && <InitialPasswordChangeModal />}
     </div>
   )
 }
