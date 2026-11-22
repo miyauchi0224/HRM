@@ -47,6 +47,27 @@ class LeaveRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             Q(employee__user=user) | delegated_applicant_filter(employee, 'employee')
         ).distinct()
 
+    def _check_editable(self, req):
+        """編集・削除は本人の申請中のものだけ（承認済みは取消 /cancel/ を使う）"""
+        if req.employee.user_id != self.request.user.id:
+            return Response({'error': '自分の申請のみ変更できます'}, status=status.HTTP_403_FORBIDDEN)
+        if req.status != LeaveRequest.Status.PENDING:
+            return Response({'error': '申請中の記録のみ変更できます。承認済みの申請は取り消してください'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return None
+
+    def update(self, request, *args, **kwargs):
+        error = self._check_editable(self.get_object())
+        if error:
+            return error
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        error = self._check_editable(self.get_object())
+        if error:
+            return error
+        return super().destroy(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         employee = self.request.user.employee
         req = serializer.save(employee=employee)
@@ -68,10 +89,18 @@ class LeaveRequestViewSet(SoftDeleteViewSetMixin, viewsets.ModelViewSet):
             if req is None or not is_delegate_for_applicant(actor, req.employee):
                 return Response({'error': '権限がありません'}, status=status.HTTP_403_FORBIDDEN)
         req = self.get_object()
+        if actor is not None and req.employee_id == actor.id:
+            return Response({'error': '自分の申請は承認・却下できません'}, status=status.HTTP_403_FORBIDDEN)
         if req.status != LeaveRequest.Status.PENDING:
             return Response({'error': '申請中の記録のみ操作できます'}, status=status.HTTP_400_BAD_REQUEST)
 
         action_type = request.data.get('action', 'approve')
+        if action_type == 'approve' and req.leave_type == LeaveRequest.LeaveType.ANNUAL:
+            # 申請後に残高が変わっている場合があるため、承認時にも確認する
+            available = services.available_annual_days(req.employee, req.start_date, exclude_pk=req.pk)
+            if req.days > available:
+                return Response({'error': f'有給の残日数が足りないため承認できません（残り {available} 日）'},
+                                status=status.HTTP_400_BAD_REQUEST)
         if action_type == 'approve':
             req.status      = LeaveRequest.Status.APPROVED
             req.approver    = actor

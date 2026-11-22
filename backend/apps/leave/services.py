@@ -117,6 +117,29 @@ def rollover_fiscal_year(today: date) -> int:
     return count
 
 
+def available_annual_days(employee, start_date: date, exclude_pk=None) -> Decimal:
+    """
+    start_date の年度で、新たに申請できる有給の日数。
+    残日数（承認済みは used_days に反映済み）から、申請中の有給の日数を差し引く。
+    残高レコードがない場合は 0 日。
+    """
+    fy = fiscal_year_of(start_date)
+    balance = LeaveBalance.objects.filter(employee=employee, fiscal_year=fy).first()
+    remaining = balance.remaining_days if balance else Decimal('0')
+
+    pending = LeaveRequest.objects.filter(
+        employee=employee,
+        leave_type=LeaveRequest.LeaveType.ANNUAL,
+        status=LeaveRequest.Status.PENDING,
+    )
+    if exclude_pk is not None:
+        pending = pending.exclude(pk=exclude_pk)
+    pending_days = sum(
+        (r.days for r in pending if fiscal_year_of(r.start_date) == fy), Decimal('0')
+    )
+    return max(remaining - pending_days, Decimal('0'))
+
+
 def taken_annual_days(employee, start: date, end: date) -> Decimal:
     """期間内に開始する承認済み有給の日数合計"""
     total = LeaveRequest.objects.filter(

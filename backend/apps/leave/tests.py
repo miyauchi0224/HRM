@@ -56,6 +56,7 @@ class TestLeaveBalanceAPI:
 @pytest.mark.django_db
 class TestLeaveRequestAPI:
     def test_create_leave_request(self, auth_client, employee_user):
+        LeaveBalanceFactory(employee=employee_user, fiscal_year=2026, granted_days=10)
         res = auth_client.post(REQUEST_BASE, {
             'leave_type': 'annual',
             'start_date': '2026-05-01',
@@ -82,6 +83,7 @@ class TestLeaveRequestAPI:
         """PATCH /approve/ で承認できる"""
         approver = ManagerEmployeeFactory()
         emp = EmployeeFactory()
+        LeaveBalanceFactory(employee=emp, fiscal_year=2026, granted_days=10)
         from apps.leave.models import LeaveRequest
         req = LeaveRequest.objects.create(
             employee=emp,
@@ -128,3 +130,81 @@ class TestLeaveRequestAPI:
         assert res.status_code == status.HTTP_200_OK
         req.refresh_from_db()
         assert req.status == 'cancelled'
+
+
+@pytest.mark.django_db
+class TestLeaveRequestRegression:
+    """不具合修正の回帰テスト（部分更新・承認後の編集・自己承認・残日数超過）"""
+
+    def _create(self, emp, days=1, start='2026-06-01', end='2026-06-01'):
+        from apps.leave.models import LeaveRequest
+        return LeaveRequest.objects.create(
+            employee=emp, leave_type='annual', start_date=start, end_date=end, days=days,
+        )
+
+    def test_partial_patch_without_dates(self, auth_client, employee_user):
+        LeaveBalanceFactory(employee=employee_user, fiscal_year=2026, granted_days=10)
+        req = self._create(employee_user)
+        res = auth_client.patch(f'{REQUEST_BASE}{req.id}/', {'reason': '変更'}, format='json')
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data['reason'] == '変更'
+
+    def test_cannot_edit_approved_request(self, auth_client, employee_user):
+        from rest_framework.test import APIClient
+        from apps.leave.models import LeaveBalance
+        LeaveBalanceFactory(employee=employee_user, fiscal_year=2026, granted_days=10)
+        req = self._create(employee_user)
+        approver_client = APIClient()
+        approver_client.force_authenticate(user=ManagerEmployeeFactory().user)
+        approver_client.patch(f'{REQUEST_BASE}{req.id}/approve/', {'action': 'approve'}, format='json')
+
+        res = auth_client.put(f'{REQUEST_BASE}{req.id}/', {
+            'leave_type': 'annual', 'start_date': '2026-06-01', 'end_date': '2026-06-05', 'days': 5,
+        }, format='json')
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert auth_client.delete(f'{REQUEST_BASE}{req.id}/').status_code == status.HTTP_400_BAD_REQUEST
+
+        # 取り消すと使用日数が元に戻る（マイナスにならない）
+        auth_client.patch(f'{REQUEST_BASE}{req.id}/cancel/')
+        assert LeaveBalance.objects.get(employee=employee_user, fiscal_year=2026).used_days == 0
+
+    def test_supervisor_cannot_edit_others_request(self, manager_client):
+        emp = EmployeeFactory()
+        LeaveBalanceFactory(employee=emp, fiscal_year=2026, granted_days=10)
+        req = self._create(emp)
+        res = manager_client.patch(f'{REQUEST_BASE}{req.id}/', {'days': 1}, format='json')
+        assert res.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_cannot_approve_own_request(self, manager_client, manager_user):
+        LeaveBalanceFactory(employee=manager_user, fiscal_year=2026, granted_days=10)
+        req = self._create(manager_user)
+        res = manager_client.patch(f'{REQUEST_BASE}{req.id}/approve/', {'action': 'approve'}, format='json')
+        assert res.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_cannot_request_more_than_remaining(self, auth_client, employee_user):
+        LeaveBalanceFactory(employee=employee_user, fiscal_year=2026, granted_days=2)
+        res = auth_client.post(REQUEST_BASE, {
+            'leave_type': 'annual', 'start_date': '2026-06-01', 'end_date': '2026-06-03', 'days': 3,
+        }, format='json')
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_pending_requests_count_against_remaining(self, auth_client, employee_user):
+        LeaveBalanceFactory(employee=employee_user, fiscal_year=2026, granted_days=2)
+        self._create(employee_user, days=2, start='2026-06-01', end='2026-06-02')
+        res = auth_client.post(REQUEST_BASE, {
+            'leave_type': 'annual', 'start_date': '2026-07-01', 'end_date': '2026-07-01', 'days': 1,
+        }, format='json')
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_days_must_fit_in_period(self, auth_client, employee_user):
+        LeaveBalanceFactory(employee=employee_user, fiscal_year=2026, granted_days=20)
+        res = auth_client.post(REQUEST_BASE, {
+            'leave_type': 'annual', 'start_date': '2026-06-01', 'end_date': '2026-06-01', 'days': 3,
+        }, format='json')
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_non_annual_leave_has_no_balance_check(self, auth_client):
+        res = auth_client.post(REQUEST_BASE, {
+            'leave_type': 'sick', 'start_date': '2026-06-01', 'end_date': '2026-06-02', 'days': 2,
+        }, format='json')
+        assert res.status_code == status.HTTP_201_CREATED

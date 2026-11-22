@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import EmploymentHistorySection from './EmploymentHistorySection'
-import { Users, Plus, Search, X, Pencil, Check, Trash2, PhoneCall, AlertCircle, Camera } from 'lucide-react'
+import { Users, Plus, Search, X, Pencil, Check, Trash2, PhoneCall, AlertCircle, Camera, Upload, Download } from 'lucide-react'
 
 interface EmergencyContact {
   id: string
@@ -68,7 +68,10 @@ export default function EmployeesPage() {
   const [search, setSearch]     = useState('')
   const [selected, setSelected] = useState<Employee | null>(null)
   const [showNew, setShowNew]   = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const qc = useQueryClient()
+  const currentUser = useAuthStore((s) => s.user)
+  const isHR = ['hr', 'admin'].includes(currentUser?.role ?? '')
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: ['employees'],
@@ -93,12 +96,22 @@ export default function EmployeesPage() {
         <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
           <Users size={22} /> 社員情報
         </h1>
-        <button
-          onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
-        >
-          <Plus size={16} /> 社員を追加
-        </button>
+        <div className="flex items-center gap-2">
+          {isHR && (
+            <button
+              onClick={() => setShowImport(true)}
+              className="flex items-center gap-2 border border-blue-300 text-blue-600 hover:bg-blue-50 text-sm font-medium px-4 py-2 rounded-lg"
+            >
+              <Upload size={16} /> CSV一括登録
+            </button>
+          )}
+          <button
+            onClick={() => setShowNew(true)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
+          >
+            <Plus size={16} /> 社員を追加
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-6">
@@ -180,6 +193,13 @@ export default function EmployeesPage() {
         <NewEmployeeModal
           onClose={() => setShowNew(false)}
           onSaved={() => { setShowNew(false); qc.invalidateQueries({ queryKey: ['employees'] }) }}
+        />
+      )}
+
+      {showImport && (
+        <CsvImportModal
+          onClose={() => setShowImport(false)}
+          onImported={() => qc.invalidateQueries({ queryKey: ['employees'] })}
         />
       )}
     </div>
@@ -679,6 +699,175 @@ function FormInput({ value, onChangeValue, inputRef, ...rest }: {
       onChange={(e) => onChangeValue(e.target.value)}
       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
     />
+  )
+}
+
+// ===== CSV一括登録モーダル =====
+interface ImportResult {
+  created: number
+  errors: number
+  results: { row: number; employee_number: string; name: string; email: string; temp_password: string }[]
+  error_details: { row: number; error: string }[]
+}
+
+function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [result, setResult] = useState<ImportResult | null>(null)
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const downloadTemplate = async () => {
+    try {
+      const res = await api.get('/api/v1/employees/template-csv/', { responseType: 'blob' })
+      downloadBlob(new Blob([res.data]), 'employees_upload_template.csv')
+    } catch {
+      alert('テンプレートのダウンロードに失敗しました')
+    }
+  }
+
+  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await api.post('/api/v1/employees/import-csv/', form)
+      setResult(res.data)
+      if (res.data.created > 0) onImported()
+    } catch (err: any) {
+      alert(err.response?.data?.error ?? 'アップロードに失敗しました')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  // 仮パスワードは後から確認できないため、一覧を CSV で保存できるようにする
+  const downloadPasswords = () => {
+    if (!result) return
+    const q = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const lines = [
+      ['社員番号', '氏名', 'メールアドレス', '仮パスワード'].map(q).join(','),
+      ...result.results.map((r) => [r.employee_number, r.name, r.email, r.temp_password].map(q).join(',')),
+    ]
+    downloadBlob(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }),
+      'employees_temp_passwords.csv')
+  }
+
+  const close = () => {
+    if (result && result.created > 0 &&
+        !confirm('仮パスワードは閉じると再表示できません。控えましたか？')) return
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h2 className="font-bold text-gray-800">社員 CSV一括登録</h2>
+          <button onClick={close} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+        </div>
+
+        <div className="p-6 overflow-y-auto space-y-5">
+          <div className="text-sm text-gray-600 space-y-1">
+            <p>テンプレートの列順で作成した CSV（UTF-8）をアップロードすると、社員とログインアカウントを一括で作成します。</p>
+            <p className="text-xs text-gray-400">
+              ロール: employee / manager / hr / labor / accounting / customer / admin ・
+              性別: male / female / other ・ 雇用形態: full_time / part_time / contract / dispatch ・
+              日付: YYYY/MM/DD
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button onClick={downloadTemplate}
+              className="flex items-center gap-2 border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm px-4 py-2 rounded-lg">
+              <Download size={15} /> テンプレートをダウンロード
+            </button>
+            <button onClick={() => fileRef.current?.click()} disabled={uploading}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
+              <Upload size={15} /> {uploading ? 'アップロード中...' : 'CSV を選択してアップロード'}
+            </button>
+            <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={upload} />
+          </div>
+
+          {result && (
+            <div className="space-y-4">
+              <p className="text-sm font-medium text-gray-700">
+                登録完了 — 成功: {result.created}件
+                {result.errors > 0 && <span className="text-red-600"> / エラー: {result.errors}件</span>}
+              </p>
+
+              {result.results.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                    <p className="text-xs text-yellow-800">
+                      仮パスワードはこの画面でしか確認できません。保存して各社員に共有してください。
+                    </p>
+                    <button onClick={downloadPasswords}
+                      className="shrink-0 flex items-center gap-1 text-xs border border-yellow-400 text-yellow-800 hover:bg-yellow-100 px-2 py-1 rounded">
+                      <Download size={12} /> CSVで保存
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto border border-gray-100 rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-400 border-b border-gray-100 bg-gray-50">
+                          <th className="text-left py-2 px-3 font-medium">行</th>
+                          <th className="text-left py-2 px-3 font-medium">社員番号</th>
+                          <th className="text-left py-2 px-3 font-medium">氏名</th>
+                          <th className="text-left py-2 px-3 font-medium">メールアドレス</th>
+                          <th className="text-left py-2 px-3 font-medium">仮パスワード</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {result.results.map((r) => (
+                          <tr key={r.row} className="border-b border-gray-50">
+                            <td className="py-2 px-3 text-gray-400">{r.row}</td>
+                            <td className="py-2 px-3">{r.employee_number}</td>
+                            <td className="py-2 px-3">{r.name}</td>
+                            <td className="py-2 px-3">{r.email}</td>
+                            <td className="py-2 px-3">
+                              <code className="font-mono bg-yellow-100 px-1 rounded select-all">{r.temp_password}</code>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {result.error_details.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-xs font-medium text-red-700 mb-1">登録できなかった行</p>
+                  <ul className="text-xs text-red-600 space-y-0.5">
+                    {result.error_details.map((e, i) => (
+                      <li key={i}>{e.row}行目: {e.error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-gray-100 flex justify-end">
+          <button onClick={close}
+            className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-sm">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 

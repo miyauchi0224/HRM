@@ -16,7 +16,7 @@ from django.utils import timezone
 from .models import SalaryGrade, Allowance, EmployeeAllowance, Payslip
 from .serializers import (
     SalaryGradeSerializer, AllowanceSerializer,
-    EmployeeAllowanceSerializer, PayslipSerializer
+    EmployeeAllowanceSerializer, PayslipSerializer, PayslipUpdateSerializer,
 )
 from apps.employees.models import Employee
 from apps.attendance.models import AttendanceRecord
@@ -234,46 +234,52 @@ class PayslipViewSet(viewsets.ReadOnlyModelViewSet):
         Body: { "year": 2026, "month": 4, "employee_id": "uuid"（省略で全員） }
         指定月の給与を計算して Payslip を生成（または更新）
         """
-        year  = request.data.get('year')
-        month = request.data.get('month')
-        if not year or not month:
-            return Response({'error': 'year と month は必須です'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            year  = int(request.data.get('year'))
+            month = int(request.data.get('month'))
+        except (TypeError, ValueError):
+            return Response({'error': 'year と month は必須です（数値）'}, status=status.HTTP_400_BAD_REQUEST)
+        if not 1 <= month <= 12:
+            return Response({'error': 'month は 1〜12 で指定してください'}, status=status.HTTP_400_BAD_REQUEST)
 
-        emp_id    = request.data.get('employee_id')
-        employees = Employee.objects.all()
+        # 対象月より前に退職した社員は計算しない
+        month_start = date(year, month, 1)
+        employees = Employee.objects.exclude(retire_date__lt=month_start)
+        emp_id = request.data.get('employee_id')
         if emp_id:
             employees = employees.filter(id=emp_id)
 
+        # 確定済の明細は再計算で上書きしない（再計算したい場合は先に status を draft に戻す）
+        confirmed_ids = set(
+            Payslip.objects.filter(year=year, month=month, status=Payslip.Status.CONFIRMED)
+            .values_list('employee_id', flat=True)
+        )
+
         results = []
+        skipped = []
         for emp in employees:
-            payslip = _calculate_payslip(emp, int(year), int(month))
+            if emp.id in confirmed_ids:
+                skipped.append({'employee_id': str(emp.id), 'employee_name': emp.full_name,
+                                'reason': '確定済のため再計算しません'})
+                continue
+            payslip = _calculate_payslip(emp, year, month)
             results.append(PayslipSerializer(payslip).data)
 
-        return Response({'calculated': len(results), 'payslips': results})
+        return Response({'calculated': len(results), 'payslips': results,
+                         'skipped': len(skipped), 'skipped_details': skipped})
 
-    @action(detail=True, methods=['patch'], url_path='update', permission_classes=[IsHR])
+    @action(detail=True, methods=['patch'], url_path='update', permission_classes=[IsAccounting])
     def update_payslip(self, request, pk=None):
         """
         PATCH /api/v1/salary/payslips/{id}/update/
-        手当・控除の個別項目を人事担当者が手動修正し、合計を再計算する
+        手当・控除の個別項目を経理・人事担当者が手動修正し、合計を再計算する
         """
         payslip = self.get_object()
-        # 編集可能フィールドのみ受け付ける
-        editable = [
-            'technical_allowance', 'secondment_allowance', 'housing_allowance',
-            'overtime_pay', 'commute_allowance', 'family_allowance',
-            'certification_allowance', 'position_allowance', 'special_allowance',
-            'perfect_attendance_allowance', 'diligence_allowance', 'extra_overtime_pay',
-            'health_insurance', 'pension', 'employment_insurance', 'nursing_insurance',
-            'property_savings', 'company_housing_fee', 'union_fee', 'mutual_aid_fee',
-            'employee_stock_contribution', 'other_deductions',
-            'income_tax', 'resident_tax',
-            'work_days', 'absence_days', 'paid_leave_days',
-            'cutoff_date', 'payment_date', 'note', 'status',
-        ]
-        for field in editable:
-            if field in request.data:
-                setattr(payslip, field, request.data[field])
+        # 編集可能フィールドのみ受け付け、型・値を検証してから反映する
+        serializer = PayslipUpdateSerializer(payslip, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        for field, value in serializer.validated_data.items():
+            setattr(payslip, field, value)
 
         payslip.recompute_totals()
         payslip.save()
@@ -706,11 +712,12 @@ def _calculate_payslip(employee: Employee, year: int, month: int) -> Payslip:
 
     # ── 社会保険（概算） ──
     # 40歳以上は介護保険料あり
-    from datetime import date as date_cls
-    age = year - employee.birth_date.year - (
-        (month, 1) < (employee.birth_date.month, employee.birth_date.day)
-    )
-    nursing_insurance    = int(Decimal(str(gross_salary)) * NURSING_INSURANCE_RATE) if age >= 40 else 0
+    # 生年月日が未登録の場合は年齢を判定できないため、介護保険料は 0 とする（必要なら手動修正）
+    birth = employee.birth_date
+    age = None
+    if birth is not None:
+        age = year - birth.year - ((month, 1) < (birth.month, birth.day))
+    nursing_insurance    = int(Decimal(str(gross_salary)) * NURSING_INSURANCE_RATE) if age is not None and age >= 40 else 0
     health_insurance     = int(Decimal(str(gross_salary)) * HEALTH_INSURANCE_RATE)
     pension              = int(Decimal(str(gross_salary)) * PENSION_RATE)
     employment_insurance = int(Decimal(str(gross_salary)) * EMPLOYMENT_INSURANCE_RATE)
@@ -720,10 +727,8 @@ def _calculate_payslip(employee: Employee, year: int, month: int) -> Payslip:
     taxable    = gross_salary - social_insurance_total
     income_tax = int(Decimal(str(max(0, taxable))) * Decimal('0.05'))
 
-    # ── 控除合計・差引支給額 ──
-    total_deductions = social_insurance_total + income_tax  # 住民税等は人事が手動設定
-    net_salary       = max(0, gross_salary - total_deductions)
-
+    # 合計（総支給・控除合計・差引支給）は、保存後に recompute_totals() で再計算する。
+    # 住民税・財形などの手動設定の控除は上書きせず、合計には含める。
     payslip, _ = Payslip.objects.update_or_create(
         employee=employee, year=year, month=month,
         defaults=dict(
@@ -740,18 +745,15 @@ def _calculate_payslip(employee: Employee, year: int, month: int) -> Payslip:
             perfect_attendance_allowance = allowance_map['perfect_attendance'],
             diligence_allowance          = allowance_map['diligence'],
             extra_overtime_pay           = allowance_map['extra_overtime'],
-            total_allowances             = total_allowances,
-            gross_salary                 = gross_salary,
             health_insurance             = health_insurance,
             pension                      = pension,
             employment_insurance         = employment_insurance,
             nursing_insurance            = nursing_insurance,
-            social_insurance_total       = social_insurance_total,
             income_tax                   = income_tax,
-            total_deductions             = total_deductions,
-            net_salary                   = net_salary,
             work_days                    = work_days,
             status                       = Payslip.Status.DRAFT,
         )
     )
+    payslip.recompute_totals()
+    payslip.save()
     return payslip

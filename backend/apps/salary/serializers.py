@@ -78,3 +78,22 @@ class PayslipSerializer(serializers.ModelSerializer):
         if emp.bank_account_holder:
             parts.append(emp.bank_account_holder)
         return '　'.join(parts) if parts else ''
+
+
+class PayslipUpdateSerializer(serializers.ModelSerializer):
+    """給与明細の手動修正用（編集してよい項目だけを受け付け、型と値を検証する）"""
+
+    class Meta:
+        model  = Payslip
+        fields = [
+            'technical_allowance', 'secondment_allowance', 'housing_allowance',
+            'overtime_pay', 'commute_allowance', 'family_allowance',
+            'certification_allowance', 'position_allowance', 'special_allowance',
+            'perfect_attendance_allowance', 'diligence_allowance', 'extra_overtime_pay',
+            'health_insurance', 'pension', 'employment_insurance', 'nursing_insurance',
+            'property_savings', 'company_housing_fee', 'union_fee', 'mutual_aid_fee',
+            'employee_stock_contribution', 'other_deductions',
+            'income_tax', 'resident_tax',
+            'work_days', 'absence_days', 'paid_leave_days',
+            'cutoff_date', 'payment_date', 'note', 'status',
+        ]

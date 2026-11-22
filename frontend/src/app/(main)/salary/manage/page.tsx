@@ -27,6 +27,7 @@ export default function SalaryManagePage() {
   const [empId, setEmpId] = useState('')        // 空 = 全員
   const [running, setRunning]   = useState(false)
   const [calcResult, setCalcResult] = useState<CalcResult[] | null>(null)
+  const [skipped, setSkipped]       = useState<{ employee_name: string; reason: string }[]>([])
   const [uploading, setUploading]   = useState(false)
   const [uploadResult, setUploadResult] = useState<any>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -45,6 +46,7 @@ export default function SalaryManagePage() {
       if (empId) body.employee_id = empId
       const res = await api.post('/api/v1/salary/payslips/calculate/', body)
       setCalcResult(res.data.payslips ?? [])
+      setSkipped(res.data.skipped_details ?? [])
       qc.invalidateQueries({ queryKey: ['payslips'] })
     } catch (e: any) {
       alert(e.response?.data?.error ?? '給与計算に失敗しました')
@@ -153,6 +155,13 @@ export default function SalaryManagePage() {
             <p className="text-sm font-medium text-gray-700 mb-3">
               計算完了 — {calcResult.length}件
             </p>
+            {skipped.length > 0 && (
+              <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-3">
+                確定済のため再計算しなかった明細 {skipped.length}件：
+                {skipped.map((s) => s.employee_name).join('、')}
+                （再計算するには明細を「計算中」に戻してください）
+              </p>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
