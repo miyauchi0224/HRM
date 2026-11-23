@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -296,7 +297,7 @@ function NewLeaveModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
       const data = e.response?.data
       const msg = data?.error ?? data?.days?.[0] ?? data?.holiday_work?.[0] ?? data?.start_date?.[0]
         ?? data?.non_field_errors?.[0] ?? '申請に失敗しました'
-      alert(msg)
+      toast.error(msg)
     } finally {
       setSaving(false)
     }

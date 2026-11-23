@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -225,7 +226,7 @@ function EmployeeDetail({ emp }: { emp: Employee }) {
       qc.invalidateQueries({ queryKey: ['employee', emp.id] })
       qc.invalidateQueries({ queryKey: ['employees'] })
     } catch {
-      alert('アップロードに失敗しました')
+      toast.error('アップロードに失敗しました')
     } finally {
       setAvatarUploading(false)
     }
@@ -729,7 +730,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
       const res = await api.get('/api/v1/employees/template-csv/', { responseType: 'blob' })
       downloadBlob(new Blob([res.data]), 'employees_upload_template.csv')
     } catch {
-      alert('テンプレートのダウンロードに失敗しました')
+      toast.error('テンプレートのダウンロードに失敗しました')
     }
   }
 
@@ -744,7 +745,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
       setResult(res.data)
       if (res.data.created > 0) onImported()
     } catch (err: any) {
-      alert(err.response?.data?.error ?? 'アップロードに失敗しました')
+      toast.error(err.response?.data?.error ?? 'アップロードに失敗しました')
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -909,7 +910,7 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
       const data = e.response?.data
       console.error('登録エラー詳細:', JSON.stringify(data, null, 2))
       const msg = data?.error ?? Object.values(data ?? {}).flat().join('\n') ?? '登録に失敗しました'
-      alert(msg)
+      toast.error(msg)
     } finally {
       setSaving(false)
     }

@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -150,7 +151,7 @@ export default function DocumentsPage() {
       setNewDescription('')
       setNewProject('')
     },
-    onError: () => alert('ドキュメントの作成に失敗しました'),
+    onError: () => toast.error('ドキュメントの作成に失敗しました'),
   })
 
   // カテゴリでフィルタリングされたドキュメント
@@ -167,7 +168,7 @@ export default function DocumentsPage() {
       await api.post(`/api/v1/documents/${docId}/upload/`, form)
       qc.invalidateQueries({ queryKey: ['documents'] })
     } catch {
-      alert('アップロードに失敗しました')
+      toast.error('アップロードに失敗しました')
     } finally {
       setUploadingDocId(null)
     }
@@ -185,13 +186,13 @@ export default function DocumentsPage() {
       link.click()
       window.URL.revokeObjectURL(url)
     } catch {
-      alert('ダウンロードに失敗しました')
+      toast.error('ダウンロードに失敗しました')
     }
   }
 
   // ===== 新規ドキュメント作成送信 =====
   const handleCreate = () => {
-    if (!newTitle.trim()) { alert('タイトルを入力してください'); return }
+    if (!newTitle.trim()) { toast.error('タイトルを入力してください'); return }
     createMut.mutate({
       title:          newTitle,
       category:       newCategory || null,

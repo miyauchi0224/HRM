@@ -1,5 +1,7 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { getPunchLocation } from '@/lib/geo'
@@ -59,7 +61,14 @@ export default function AttendancePage() {
   const user = useAuthStore((s) => s.user)
   const isManager = user?.role && ['supervisor', 'manager', 'hr', 'accounting', 'admin'].includes(user.role)
   const [breakMinutes, setBreakMinutes] = useState(60)
-  const [activeTab, setActiveTab]       = useState<Tab>('clock')
+  // 表示中のタブは URL（?tab=）に持たせる。メニューの「36協定状況」から直接開け、再読み込みしても戻らない
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const TAB_KEYS: Tab[] = ['clock', 'export', 'upload', 'projects', 'overtime36', 'gantt']
+  const tabParam  = searchParams?.get('tab') as Tab | null
+  const activeTab: Tab = tabParam && TAB_KEYS.includes(tabParam) ? tabParam : 'clock'
+  const setActiveTab = (key: Tab) =>
+    router.replace(key === 'clock' ? '/attendance' : `/attendance?tab=${key}`, { scroll: false })
   const [yearMonth, setYearMonth]       = useState(() => new Date().toISOString().slice(0, 7))
   const [editId, setEditId]             = useState<string | null>(null)
   const [editData, setEditData]         = useState<EditData>({ stamped_clock_in: '', clock_in: '', stamped_clock_out: '', clock_out: '', break_minutes: 60, note: '', project_records: [] })
@@ -191,12 +200,14 @@ export default function AttendancePage() {
       <h1 className="text-2xl font-bold text-gray-800 mb-6">出退勤管理</h1>
 
       {/* タブ */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
+      <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto" role="tablist">
         {tabs.map(({ key, label }) => (
           <button
             key={key}
+            role="tab"
+            aria-selected={activeTab === key}
             onClick={() => setActiveTab(key)}
-            className={`px-5 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+            className={`px-5 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${
               activeTab === key
                 ? 'bg-white border border-b-white border-gray-200 text-blue-600 -mb-px'
                 : 'text-gray-500 hover:text-gray-700'
@@ -626,7 +637,7 @@ function ExportPanel() {
       document.body.removeChild(a)
       window.URL.revokeObjectURL(blobUrl)
     } catch {
-      alert('ダウンロードに失敗しました')
+      toast.error('ダウンロードに失敗しました')
     } finally {
       setLoading(null)
     }

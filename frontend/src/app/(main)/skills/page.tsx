@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -59,7 +60,7 @@ export default function SkillsPage() {
       await api.post(`/api/v1/skills/${skillId}/upload-certificate/`, form)
       qc.invalidateQueries({ queryKey: ['skills'] })
     } catch {
-      alert('認定証のアップロードに失敗しました')
+      toast.error('認定証のアップロードに失敗しました')
     } finally {
       setCertUploading(null)
       const ref = certRefs.current[skillId]
@@ -271,7 +272,7 @@ function NewSkillModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
       })
       onSaved()
     } catch (e: any) {
-      alert(e.response?.data?.skill_name?.[0] ?? '登録に失敗しました')
+      toast.error(e.response?.data?.skill_name?.[0] ?? '登録に失敗しました')
     } finally {
       setSaving(false)
     }

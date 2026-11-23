@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -129,7 +130,7 @@ function MeetingDetail({ meeting, onSaved }: { meeting: Meeting; onSaved: () => 
   const save = useMutation({
     mutationFn: patch,
     onSuccess: onSaved,
-    onError: (e: any) => alert(e.response?.data?.error ?? '保存に失敗しました'),
+    onError: (e: any) => toast.error(e.response?.data?.error ?? '保存に失敗しました'),
   })
 
   const ai = useMutation({
@@ -143,7 +144,7 @@ function MeetingDetail({ meeting, onSaved }: { meeting: Meeting; onSaved: () => 
       setSuggestion({ action_items: data.action_items, next_agenda: data.next_agenda })
       onSaved()
     },
-    onError: (e: any) => alert(e.response?.data?.error ?? 'AI 要約に失敗しました'),
+    onError: (e: any) => toast.error(e.response?.data?.error ?? 'AI 要約に失敗しました'),
   })
 
   const addItem = (owner: 'manager' | 'member') => {
@@ -287,7 +288,7 @@ function NewMeetingModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
       onSaved(res.data.id)
     } catch (e: any) {
       const d = e.response?.data
-      alert(d?.error ?? d?.manager?.[0] ?? d?.non_field_errors?.[0] ?? '登録に失敗しました')
+      toast.error(d?.error ?? d?.manager?.[0] ?? d?.non_field_errors?.[0] ?? '登録に失敗しました')
     } finally {
       setSaving(false)
     }

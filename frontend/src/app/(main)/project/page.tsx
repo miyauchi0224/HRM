@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 /**
  * プロジェクト管理ページ
  *
@@ -262,7 +263,7 @@ export default function ProjectPage() {
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['projects-all'] })
       const { created, updated, errors } = res.data
-      alert(`登録: ${created}件 / 更新: ${updated}件${errors?.length ? ` / エラー: ${errors.length}件` : ''}`)
+      toast.success(`登録: ${created}件 / 更新: ${updated}件${errors?.length ? ` / エラー: ${errors.length}件` : ''}`)
     },
   })
 

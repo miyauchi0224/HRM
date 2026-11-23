@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -98,7 +99,7 @@ export default function CalendarPanel() {
       // トークン情報をリロード
       window.location.reload()
     } catch (error) {
-      alert('連携解除に失敗しました')
+      toast.error('連携解除に失敗しました')
     } finally {
       setRevoking(null)
     }
@@ -121,7 +122,7 @@ export default function CalendarPanel() {
       setSelectedProvider('local')
     },
     onError: () => {
-      alert('予定の追加に失敗しました')
+      toast.error('予定の追加に失敗しました')
     },
   })
 
@@ -141,7 +142,7 @@ export default function CalendarPanel() {
       setEditEnd('')
     },
     onError: () => {
-      alert('予定の更新に失敗しました')
+      toast.error('予定の更新に失敗しました')
     },
   })
 
@@ -153,7 +154,7 @@ export default function CalendarPanel() {
       setEditEventModal(null)
     },
     onError: () => {
-      alert('予定の削除に失敗しました')
+      toast.error('予定の削除に失敗しました')
     },
   })
 
@@ -182,7 +183,7 @@ export default function CalendarPanel() {
       link.click()
       link.parentNode?.removeChild(link)
     } catch (error) {
-      alert('エクスポートに失敗しました')
+      toast.error('エクスポートに失敗しました')
     } finally {
       setExporting(false)
     }

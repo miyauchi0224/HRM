@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -195,7 +196,7 @@ function GoalCard({ goal, isManager, totalWeight, onUpdate }: { goal: MBOGoal; i
       setEditingGoal(false)
       onUpdate()
     } catch (e: any) {
-      alert(e.response?.data?.error ?? '更新に失敗しました')
+      toast.error(e.response?.data?.error ?? '更新に失敗しました')
     } finally { setSavingGoal(false) }
   }
 
@@ -419,7 +420,7 @@ function ReportCard({ report, onUpdate }: { report: MBOReport; onUpdate: () => v
       await api.patch(`/api/v1/mbo/reports/${report.id}/submit/`)
       onUpdate()
     } catch {
-      alert('申請に失敗しました')
+      toast.error('申請に失敗しました')
     } finally {
       setSubmitting(false)
     }
@@ -447,7 +448,7 @@ function ReportCard({ report, onUpdate }: { report: MBOReport; onUpdate: () => v
       const res = await api.post(`/api/v1/mbo/reports/${report.id}/ai-suggest/`)
       setAiText(res.data.ai_suggestion)
     } catch {
-      alert('AI提案の取得に失敗しました')
+      toast.error('AI提案の取得に失敗しました')
     } finally {
       setAiLoading(false)
     }
@@ -459,7 +460,7 @@ function ReportCard({ report, onUpdate }: { report: MBOReport; onUpdate: () => v
       const res = await api.post('/api/v1/ai/draft-next-month-issue/', { result, goal: '' })
       setNextIssue(res.data.draft ?? '')
     } catch {
-      alert('AI提案の取得に失敗しました')
+      toast.error('AI提案の取得に失敗しました')
     } finally {
       setNextIssueAiLoading(false)
     }
@@ -658,7 +659,7 @@ function NewReportForm({ goalId, onSaved, submittedMonths = [] }: { goalId: stri
       setSelfScore('')
       onSaved()
     } catch (e: any) {
-      alert(e.response?.data?.non_field_errors?.[0] ?? '登録に失敗しました')
+      toast.error(e.response?.data?.non_field_errors?.[0] ?? '登録に失敗しました')
     } finally {
       setSaving(false)
     }
@@ -670,7 +671,7 @@ function NewReportForm({ goalId, onSaved, submittedMonths = [] }: { goalId: stri
       const res = await api.post('/api/v1/ai/draft-next-month-issue/', { result, goal: '' })
       setNextIssue(res.data.draft ?? '')
     } catch {
-      alert('AI提案の取得に失敗しました')
+      toast.error('AI提案の取得に失敗しました')
     } finally {
       setAiLoading(false)
     }
@@ -799,7 +800,7 @@ function NewGoalModal({
       onSaved()
     } catch (e: any) {
       const msg = e.response?.data?.error ?? e.response?.data?.weight?.[0] ?? '登録に失敗しました'
-      alert(msg)
+      toast.error(msg)
     } finally {
       setSaving(false)
     }

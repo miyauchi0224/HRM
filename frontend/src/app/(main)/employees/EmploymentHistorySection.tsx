@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -108,7 +109,7 @@ function OrderForm({ employeeId, onDone, onCancel }: { employeeId: string; onDon
       onDone()
     } catch (e: any) {
       const d = e.response?.data
-      alert(d?.error ?? d?.non_field_errors?.[0] ?? d?.effective_date?.[0] ?? '登録に失敗しました')
+      toast.error(d?.error ?? d?.non_field_errors?.[0] ?? d?.effective_date?.[0] ?? '登録に失敗しました')
     } finally {
       setSaving(false)
     }

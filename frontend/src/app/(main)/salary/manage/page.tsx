@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -49,7 +50,7 @@ export default function SalaryManagePage() {
       setSkipped(res.data.skipped_details ?? [])
       qc.invalidateQueries({ queryKey: ['payslips'] })
     } catch (e: any) {
-      alert(e.response?.data?.error ?? '給与計算に失敗しました')
+      toast.error(e.response?.data?.error ?? '給与計算に失敗しました')
     } finally {
       setRunning(false)
     }
@@ -77,7 +78,7 @@ export default function SalaryManagePage() {
       setUploadResult(res.data)
       qc.invalidateQueries({ queryKey: ['payslips'] })
     } catch {
-      alert('アップロードに失敗しました')
+      toast.error('アップロードに失敗しました')
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''

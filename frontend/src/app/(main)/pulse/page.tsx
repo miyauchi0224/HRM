@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -37,7 +38,7 @@ export default function PulsePage() {
   const publish = useMutation({
     mutationFn: (id: string) => api.post(`/api/v1/pulse/surveys/${id}/publish/`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pulse-surveys'] }),
-    onError: (e: any) => alert(e.response?.data?.error ?? '公開に失敗しました'),
+    onError: (e: any) => toast.error(e.response?.data?.error ?? '公開に失敗しました'),
   })
 
   return (
@@ -123,7 +124,7 @@ function NewSurveyModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
       await api.post('/api/v1/pulse/surveys/', { title, start_date: start, end_date: end, is_anonymous: anonymous })
       onSaved()
     } catch (e: any) {
-      alert(e.response?.data?.end_date?.[0] ?? '作成に失敗しました')
+      toast.error(e.response?.data?.end_date?.[0] ?? '作成に失敗しました')
     } finally {
       setSaving(false)
     }

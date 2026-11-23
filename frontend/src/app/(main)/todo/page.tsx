@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -326,7 +327,7 @@ function NewTodoModal({
       })
       onSaved()
     } catch {
-      alert('登録に失敗しました')
+      toast.error('登録に失敗しました')
     } finally {
       setSaving(false)
     }
@@ -464,7 +465,7 @@ function DailyReportSection() {
       }
       await qc.invalidateQueries({ queryKey: ['daily-reports'] })
     } catch {
-      alert('保存に失敗しました')
+      toast.error('保存に失敗しました')
     } finally {
       setSaving(false)
     }

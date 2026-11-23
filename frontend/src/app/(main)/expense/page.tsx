@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -93,7 +94,7 @@ export default function ExpensePage() {
       setUploadResult(res.data)
       qc.invalidateQueries({ queryKey: ['expense-requests'] })
     } catch {
-      alert('アップロードに失敗しました')
+      toast.error('アップロードに失敗しました')
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -110,7 +111,7 @@ export default function ExpensePage() {
       await api.post(`/api/v1/expense/requests/${reqId}/attachments/`, form)
       qc.invalidateQueries({ queryKey: ['expense-requests'] })
     } catch {
-      alert('ファイルのアップロードに失敗しました')
+      toast.error('ファイルのアップロードに失敗しました')
     } finally {
       setAttachUploading(null)
       const ref = attachRefs.current[reqId]
@@ -351,7 +352,7 @@ function NewExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
       })
       onSaved()
     } catch (e: any) {
-      alert(e.response?.data?.error ?? '申請に失敗しました')
+      toast.error(e.response?.data?.error ?? '申請に失敗しました')
     } finally {
       setSaving(false)
     }

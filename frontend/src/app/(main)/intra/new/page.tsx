@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation } from '@tanstack/react-query'
@@ -61,7 +62,7 @@ export default function IntraNewPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const requestAI = async () => {
-    if (!title.trim()) { alert('タイトルを先に入力してください'); return }
+    if (!title.trim()) { toast.error('タイトルを先に入力してください'); return }
     setAiLoading(true)
     try {
       const res = await api.post('/api/v1/ai/draft-intra-article/', {
@@ -93,7 +94,7 @@ export default function IntraNewPage() {
         setContent((c) => c + insertion)
       }
     } catch {
-      alert('画像のアップロードに失敗しました')
+      toast.error('画像のアップロードに失敗しました')
     } finally {
       setUploading(false)
     }

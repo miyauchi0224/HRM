@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -254,7 +255,7 @@ function CheckupModal({ initial, fiscalYear, onClose, onSaved }: {
       onSaved()
     } catch (e: any) {
       const d = e.response?.data
-      alert(d?.error ?? d?.checkup_date?.[0] ?? d?.followup_due_date?.[0] ?? d?.employee?.[0] ?? '保存に失敗しました')
+      toast.error(d?.error ?? d?.checkup_date?.[0] ?? d?.followup_due_date?.[0] ?? d?.employee?.[0] ?? '保存に失敗しました')
     } finally {
       setSaving(false)
     }

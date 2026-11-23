@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Clock, Menu } from 'lucide-react'
@@ -65,7 +65,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     <div className="flex min-h-screen bg-gray-50">
       {/* PC: 常に表示 */}
       <div className="hidden md:flex">
-        <Sidebar />
+        <Suspense fallback={<div className="w-60 bg-gray-900" />}>
+          <Sidebar />
+        </Suspense>
       </div>
 
       {/* スマホ: メニューボタンで開くドロワー */}
@@ -73,7 +75,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <div className="fixed inset-0 z-40 flex md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMenuOpen(false)} />
           <div className="relative z-10 overflow-y-auto">
-            <Sidebar />
+            <Suspense fallback={null}>
+              <Sidebar />
+            </Suspense>
           </div>
         </div>
       )}
@@ -89,7 +93,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           </Link>
         </header>
         <main className="flex-1 p-4 md:p-6 overflow-auto">
-          {children}
+          <Suspense fallback={null}>{children}</Suspense>
         </main>
       </div>
 

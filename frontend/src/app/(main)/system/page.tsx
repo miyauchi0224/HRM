@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -69,8 +70,8 @@ function WebhookEndpoints({ isAdmin }: { isAdmin: boolean }) {
   })
   const test = useMutation({
     mutationFn: (id: string) => api.post(`/api/v1/notifications/webhooks/${id}/test/`),
-    onSuccess: () => alert('テスト通知を送信しました'),
-    onError: (e: any) => alert(e.response?.data?.error ?? '送信に失敗しました'),
+    onSuccess: () => toast.success('テスト通知を送信しました'),
+    onError: (e: any) => toast.error(e.response?.data?.error ?? '送信に失敗しました'),
   })
 
   return (
@@ -136,7 +137,7 @@ function NewEndpointModal({ types, onClose, onSaved }: { types: NotificationType
       onSaved()
     } catch (e: any) {
       const d = e.response?.data
-      alert(d?.url?.[0] ?? d?.notification_types?.[0] ?? d?.name?.[0] ?? '登録に失敗しました')
+      toast.error(d?.url?.[0] ?? d?.notification_types?.[0] ?? d?.name?.[0] ?? '登録に失敗しました')
     } finally {
       setSaving(false)
     }
@@ -199,7 +200,7 @@ function Jobs({ isAdmin }: { isAdmin: boolean }) {
   const run = useMutation({
     mutationFn: (name: string) => api.post(`/api/v1/scheduler/jobs/${name}/run/`, { force: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['scheduler-jobs'] }),
-    onError: (e: any) => alert(e.response?.data?.error ?? '実行に失敗しました'),
+    onError: (e: any) => toast.error(e.response?.data?.error ?? '実行に失敗しました'),
   })
 
   return (

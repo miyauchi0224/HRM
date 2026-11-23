@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -127,7 +128,7 @@ export default function ApprovalPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['approval-requests'] }); setSelected(null) },
     onError: (err: any) => {
       const msg = err?.response?.data?.error ?? err?.response?.data?.detail ?? '処理に失敗しました'
-      alert(msg)
+      toast.error(msg)
     },
   })
 
@@ -152,7 +153,7 @@ export default function ApprovalPage() {
       await api.post(`/api/v1/approval/requests/${reqId}/attachments/`, form)
       qc.invalidateQueries({ queryKey: ['approval-requests'] })
     } catch {
-      alert('ファイルのアップロードに失敗しました')
+      toast.error('ファイルのアップロードに失敗しました')
     } finally {
       setAttachUploading(null)
       const ref = attachRefs.current[reqId]
@@ -510,7 +511,7 @@ function DecideModal({ req, onClose, onDecide, isPending }: {
 
   const handleDecide = (decision: string) => {
     if (!comment.trim()) {
-      alert('承認・却下には理由（コメント）を入力してください')
+      toast.error('承認・却下には理由（コメント）を入力してください')
       return
     }
     onDecide(decision, comment)

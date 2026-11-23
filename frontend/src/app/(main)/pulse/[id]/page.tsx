@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
@@ -74,7 +75,7 @@ function AnswerForm({ survey }: { survey: PulseSurvey }) {
       qc.invalidateQueries({ queryKey: ['pulse-survey', survey.id] })
       router.push('/pulse')
     } catch (e: any) {
-      alert(e.response?.data?.error ?? '送信に失敗しました')
+      toast.error(e.response?.data?.error ?? '送信に失敗しました')
     } finally {
       setSaving(false)
     }

@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -33,7 +34,7 @@ export default function DelegationPage() {
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/api/v1/approval/delegations/${id}/`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['approval-delegations'] }),
-    onError: (e: any) => alert(e.response?.data?.error ?? '削除に失敗しました'),
+    onError: (e: any) => toast.error(e.response?.data?.error ?? '削除に失敗しました'),
   })
 
   const mine     = rows.filter((r) => r.delegator_name === user?.full_name)
@@ -138,7 +139,7 @@ function NewDelegationModal({ onClose, onSaved }: { onClose: () => void; onSaved
       onSaved()
     } catch (e: any) {
       const d = e.response?.data
-      alert(d?.error ?? d?.detail ?? d?.delegate?.[0] ?? d?.end_date?.[0] ?? '登録に失敗しました')
+      toast.error(d?.error ?? d?.detail ?? d?.delegate?.[0] ?? d?.end_date?.[0] ?? '登録に失敗しました')
     } finally {
       setSaving(false)
     }

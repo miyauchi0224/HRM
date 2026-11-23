@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -108,7 +109,7 @@ export default function SalaryPage() {
       a.click()
       window.URL.revokeObjectURL(a.href)
     } catch {
-      alert('ダウンロードに失敗しました')
+      toast.error('ダウンロードに失敗しました')
     } finally {
       setDownloading(null)
     }
@@ -133,7 +134,7 @@ export default function SalaryPage() {
       const res = await api.post('/api/v1/salary/payslips/import-csv/', form)
       setUploadResult(res.data)
     } catch {
-      alert('アップロードに失敗しました')
+      toast.error('アップロードに失敗しました')
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
